@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<project default="compile" basedir=".">
+
+	<target name="compile">
+		<exec executable="tools/node/node.exe">
+			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
+		</exec>
+		<delete file="-p" />
+	</target>
+
+	<target name="clean">
+		<delete dir="target" />
+	</target>
+</project>
