@@ -1,15 +1,22 @@
 <?xml version="1.0"?>
 
-<project default="compile" basedir=".">
+<project default="test" basedir=".">
 
-	<target name="compile">
+	<target name="compile" depends="clean">
 		<exec executable="tools/node/node.exe">
 			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
 		</exec>
 		<delete file="-p" />
 	</target>
-
+	
+	<target name="test" depends="compile">
+		<apply executable="tools/node/node.exe">
+			<fileset dir="target/test/">
+				<include name="**/*.js"></include>	
+			</fileset>
+		</apply>
+	</target>
 	<target name="clean">
-		<delete dir="target" />
+		<delete dir="target/" file="**/*" includeemptydirs="true" failonerror="false" />
 	</target>
 </project>

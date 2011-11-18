@@ -1,4 +1,4 @@
-sys = require("util")
+util = require("util")
 sprintf = require("util/sprintf").sprintf
 stacktrace = require("util/stacktrace")
 loglevels =
@@ -12,7 +12,7 @@ loglevels =
 loglevelStrs = []
 
 logit = (level, inargs) ->
-  sys.log loglevelStrs[level] + ": " + sprintf.apply({}, inargs)  if level <= loglevel
+  util.log loglevelStrs[level] + ": " + sprintf.apply({}, inargs)  if level <= loglevel
 setLoglevel = (level) ->
   loglevel = loglevels[level]
 trace = (label) ->

@@ -1,7 +1,7 @@
 (function() {
-  var logit, loglevel, loglevelStrs, loglevels, setLoglevel, sprintf, stacktrace, sys, trace;
+  var logit, loglevel, loglevelStrs, loglevels, setLoglevel, sprintf, stacktrace, trace, util;
 
-  sys = require("util");
+  util = require("util");
 
   sprintf = require("util/sprintf").sprintf;
 
@@ -20,7 +20,7 @@
 
   logit = function(level, inargs) {
     if (level <= loglevel) {
-      return sys.log(loglevelStrs[level] + ": " + sprintf.apply({}, inargs));
+      return util.log(loglevelStrs[level] + ": " + sprintf.apply({}, inargs));
     }
   };
 
