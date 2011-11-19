@@ -7,41 +7,37 @@ puts = require("util").puts
 suite = new TestSuite
 
 suite.newAsyncTest "We can create a certificate and self sign it in one step", (assert, test)->
-  certgen.genSelfSigned "key", "cert", {"commonName":"test@test.com", "organizationalUnitName":"test.com", "organizationName":"orgName"}, 1095, (err) ->
+  certgen.genSelfSigned {"commonName":"test@test.com", "organizationalUnitName":"test.com", "organizationName":"orgName"}, 1095, (err, key, cert) ->
     assert.isNull(err)
-    assert.fileExists "key", ->
-      assert.fileExists "cert", ->
-        test.done()
+    assert.isTrue(key, "No key")
+    assert.isTrue(cert, "No cert")
+    test.done()
 
 suite.newAsyncTest "If we don't pass in material for the subject, generation of the cert should fail", (assert, test) ->
-  certgen.genSelfSigned "badkey", "badcert", {}, 1095, (err) ->
+  certgen.genSelfSigned {}, 1095, (err) ->
     assert.ok(err, "We expected it to blow up because the subject doesn't start with a /")
-    assert.fileExists "badKey", ->
-      assert.fileAbsent "badCert", ->
-        test.done()
+    test.done()
 
 suite.newAsyncTest "We can generate just a key", (assert, test) ->
-  certgen.genKey "justaKey", (err) ->
+  certgen.genKey (err, key) ->
     assert.isNull(err)
-    assert.fileExists "justaKey", ->
-      test.done()
+    assert.isTrue(key, "No key")
+    test.done()
     
 suite.newAsyncTest "We can generate a cert sign request", (assert, test) ->
-  certgen.genSelfSigned "signingKey", "signingCert", {"email":"test@test.com", "hostname":"test.com"}, 1095, (err) ->
+  certgen.genSelfSigned {"email":"test@test.com", "hostname":"test.com"}, 1095, (err, key, cert) ->
     assert.isNull(err)
-    assert.fileExists "signingKey", ->
-      assert.fileExists "signingCert", ->
-        certgen.genCSR "signingKey", "outputCSR", {"email":"test@test.com", "hostname":"test.com"}, (err) ->
-          assert.isNull(err)
-          assert.fileExists "outputCSR", ->
-            test.done()
+    certgen.genCSR key, {"email":"test@test.com", "hostname":"test.com"}, (err, csr) ->
+      assert.isNull err
+      assert.isTrue csr, "No CRS" 
+      test.done()
 
 suite.newAsyncTest "We can verify a CSR", (assert, test) ->
-  certgen.genSelfSigned "verifyingKey", "verifyingCert", {"email":"test@test.com", "hostname":"test.com"}, 1095, (err) ->
+  certgen.genSelfSigned {"email":"test@test.com", "hostname":"test.com"}, 1095, (err, key, cert) ->
     assert.isNull(err)
-    certgen.genCSR "verifyingKey", "verifyingCSR", {"email":"test@test.com", "hostname":"test.com"}, (err) ->
+    certgen.genCSR key, {"email":"test@test.com", "hostname":"test.com"}, (err, csr) ->
       assert.isNull(err)
-      certgen.verifyCSR "verifyingCSR", (err) ->
+      certgen.verifyCSR csr, (err) ->
         assert.isNull(err)
         test.done()
         
@@ -57,11 +53,11 @@ suite.newAsyncTest "We can initialize our serial file", (assert, test) ->
 
 suite.newAsyncTest "We can sign a cert using another cert + key and a verified CSR", (assert, test) ->
   certgen.initSerialFile "ser", -> 
-    certgen.genSelfSigned "goodKey", "goodCert", {"email":"test@test.com", "hostname":"test.com"}, 1095, (err) ->
-      certgen.genKey "plainKey", (err) ->
-        certgen.genCSR "plainKey", "plainCSR", {"email":"test@test.com", "hostname":"test.com"}, (err) ->
-          certgen.verifyCSR "plainCSR", (err) ->
-            certgen.signCSR "plainCSR", "goodCert", "goodKey", "ser", "finalCert", 1095, (err) ->
+    certgen.genSelfSigned {"email":"test@test.com", "hostname":"test.com"}, 1095, (err, signerKey, cert) ->
+      certgen.genKey (err, key) ->
+        certgen.genCSR key, {"email":"test@test.com", "hostname":"test.com"}, (err, csr) ->
+          certgen.verifyCSR csr, (err) ->
+            certgen.signCSR csr, cert, signerKey, "ser", "finalCert", 1095, (err) ->
               assert.fileExists "finalCert", ->
                 test.done()
 

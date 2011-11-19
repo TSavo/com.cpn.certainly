@@ -1,8 +1,10 @@
 exec = require("child_process").exec
 fs = require("fs")
 puts = require("util").puts
+Semaphore = require("util/concurrent").Semaphore
 
 
+exclusive = new Semaphore
 
 ###*
  * Construct an x509 -subj argument from an options object.
@@ -23,11 +25,21 @@ buildSubj = (options) ->
  * @param {Object} options An options object with optional email and hostname.
  * @param {Function} callback fired with (err).
 ###
-genSelfSigned = (outputKey, outputCert, options, daysValidFor, callback) ->
-  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout \"#{outputKey}\"", "-out \"#{outputCert}\"" ]
+genSelfSigned = (options, daysValidFor, callback) ->
+  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout key", "-out cert" ]
   cmd = "openssl req " + reqArgs.join(" ")
-  exec cmd, (err, stdout, stderr) ->
-    callback err, stdout, stderr
+  exclusive.acquire ->
+    exec cmd, (err, stdout, stderr) ->
+      if err
+        exclusive.release()
+        callback err
+        return
+      fs.readFile "cert", (err, cert) ->
+        fs.unlink "cert", ->
+          fs.readFile "key", (err, key) ->
+            fs.unlink "key", ->
+              exclusive.release()
+              callback null, key, cert
     
     
 ###*
@@ -36,11 +48,23 @@ genSelfSigned = (outputKey, outputCert, options, daysValidFor, callback) ->
  * @param {String} outputKey Location to output the key to.
  * @param {Function} callback Callback fired with (err).
 ###
-genKey = (outputKey, callback) ->
-  args = [ "-out \"#{outputKey}\"", 2048 ]
+genKey = (callback) ->
+  args = [ "-out key", 2048 ]
   cmd = "openssl genrsa " + args.join(" ")
-  exec cmd, (err, stdout, stderr) ->
-    callback err, stdout, stderr if callback
+  exclusive.acquire ->
+    exec cmd, (err, stdout, stderr) ->
+      if err
+        exclusive.release()
+        callback err
+        return
+      fs.readFile "key", (err, key) ->
+        if(err)
+          exclusive.release()
+          callback err
+          return
+        fs.unlink "key", ->
+          exclusive.release()
+          callback null, key
     
 ###*
  * Generate a CSR for the specified key, and pass it back as a string through
@@ -50,12 +74,29 @@ genKey = (outputKey, callback) ->
  * @param {Object} options An options object with optional email and hostname.
  * @param {Function} callback Callback fired with (err, csrText).
 ###
-genCSR = (inputKey, outputCSR, options, callback) ->
-  args = [ "-batch", "-new", "-nodes", "-subj \"#{buildSubj(options)}\"", "-key \"#{inputKey}\"", "-out \"#{outputCSR}\"" ]
+genCSR = (key, options, callback) ->
+  args = [ "-batch", "-new", "-nodes", "-subj \"#{buildSubj(options)}\"", "-key key", "-out CSR" ]
   cmd = "openssl req " + args.join(" ")
-  exec cmd, (err, stdout, stderr) ->
-    callback err, stdout, stderr if callback
-    
+  exclusive.acquire ->
+    fs.writeFile "key", key, ->
+      exec cmd, (err, stdout, stderr) ->
+        fs.unlink "key", ->
+          if err
+            exclusive.release()
+            callback err
+            return
+          fs.readFile "CSR", (err, csr) ->
+            if err
+              exclusive.release()
+              callback err
+            fs.unlink "CSR", (err) ->
+              exclusive.release()
+              if err
+                callback err
+                return
+              callback null, csr
+            
+        
 ###*
  * Initialize an openssl '.srl' file for serial number tracking.
  * @param {String} srlPath Path to use for the srl file.
@@ -69,11 +110,15 @@ initSerialFile = (srlPath, callback) ->
  * @param {String} csrPath Path to the CSR file.
  * @param {Function} callback Callback fired with (err).
 ###
-verifyCSR = (csrPath, callback) ->
-  args = [ "-verify", "-noout", "-in \"#{csrPath}\"" ]
+verifyCSR = (csr, callback) ->
+  args = [ "-verify", "-noout", "-in csr" ]
   cmd = "openssl req #{args.join(" ")}"
-  exec cmd, (err, stdout, stderr) ->
-    callback err, stdout, stderr
+  exclusive.acquire ->
+    fs.writeFile "csr", csr, ->
+      exec cmd, (err, stdout, stderr) ->
+        fs.unlink "csr", ->
+          exclusive.release();
+          callback err, stdout, stderr 
 
 ###*
  * Sign a CSR and store the resulting certificate to the specified location
@@ -84,7 +129,8 @@ verifyCSR = (csrPath, callback) ->
  * @param {String} outputCert Path at which to store the certificate.
  * @param {Function} callback Callback fired with (err).
 ###
-signCSR = (csrPath, caCertPath, caKeyPath, caSerialPath, outputCert, daysValidFor, callback) ->
+signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
+  ###TODO FIX THIS ONE TO MATCH THE NEW ARGS###
   args = [ "-req", "-days #{daysValidFor}", "-CA \"#{caCertPath}\"", "-CAkey \"#{caKeyPath}\"", "-CAserial \"#{caSerialPath}\"", "-in #{csrPath}", "-out #{outputCert}" ]
   cmd = "openssl x509 #{args.join(" ")}"
   exec cmd, (err, stdout, stderr) ->
