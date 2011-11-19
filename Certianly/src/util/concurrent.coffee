@@ -8,7 +8,6 @@ class ThreadBarrier
     
 
 class Semaphore
-  
   constructor: ->
     @waiting = []
     @inUse = false

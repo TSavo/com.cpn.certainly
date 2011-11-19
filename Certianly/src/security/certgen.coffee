@@ -1,5 +1,7 @@
 exec = require("child_process").exec
 fs = require("fs")
+puts = require("util").puts
+
 
 
 ###*
@@ -8,14 +10,9 @@ fs = require("fs")
  * @return {String} A string suitable for use with x509 as a -subj argument.
 ###
 buildSubj = (options) ->
-  attrMap =
-    hostname: "CN"
-    email: "emailAddress"
-
   subject = ""
-  key = undefined
-  for key of attrMap
-    subject = "#{subject}/#{attrMap[key]}=#{options[key]}" if attrMap.hasOwnProperty(key) and options.hasOwnProperty(key)
+  for key, value of options
+    subject = "#{subject}/#{key}=#{value}"
   subject
   
 ###*
@@ -26,8 +23,8 @@ buildSubj = (options) ->
  * @param {Object} options An options object with optional email and hostname.
  * @param {Function} callback fired with (err).
 ###
-genSelfSigned = (outputKey, outputCert, options, callback) ->
-  reqArgs = [ "-batch", "-x509", "-nodes", "-days 1825", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout \"#{outputKey}\"", "-out \"#{outputCert}\"" ]
+genSelfSigned = (outputKey, outputCert, options, daysValidFor, callback) ->
+  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout \"#{outputKey}\"", "-out \"#{outputCert}\"" ]
   cmd = "openssl req " + reqArgs.join(" ")
   exec cmd, (err, stdout, stderr) ->
     callback err, stdout, stderr
@@ -87,8 +84,8 @@ verifyCSR = (csrPath, callback) ->
  * @param {String} outputCert Path at which to store the certificate.
  * @param {Function} callback Callback fired with (err).
 ###
-signCSR = (csrPath, caCertPath, caKeyPath, caSerialPath, outputCert, callback) ->
-  args = [ "-req", "-days 1825", "-CA \"#{caCertPath}\"", "-CAkey \"#{caKeyPath}\"", "-CAserial \"#{caSerialPath}\"", "-in #{csrPath}", "-out #{outputCert}" ]
+signCSR = (csrPath, caCertPath, caKeyPath, caSerialPath, outputCert, daysValidFor, callback) ->
+  args = [ "-req", "-days #{daysValidFor}", "-CA \"#{caCertPath}\"", "-CAkey \"#{caKeyPath}\"", "-CAserial \"#{caSerialPath}\"", "-in #{csrPath}", "-out #{outputCert}" ]
   cmd = "openssl x509 #{args.join(" ")}"
   exec cmd, (err, stdout, stderr) ->
     callback err, stdout, stderr
@@ -112,6 +109,20 @@ getCertFingerprint = (certPath, callback) ->
       return
     callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '')
 
+sign = (keyPath, message, signaturePath, callback) ->
+  args = ["-sign #{keyPath}", "-out #{signaturePath}"]
+  fs.writeFile "messageToBeSigned", message, ->
+    cmd = "openssl dgst -sha1 #{args.join(" ")} messageToBeSigned"
+    exec cmd, (err, stdout, stderr) ->
+      callback err, stdout, stderr
+
+verify = (certPath, signaturePath, message, out, callback) ->
+  args = ["-prverify #{certPath}", "-signature #{signaturePath}"]
+  fs.writeFile "messageToBeVerified", message, ->      
+    cmd = "openssl dgst -sha1 #{args.join(" ")} messageToBeVerified"
+    exec cmd, (err, stdout, stderr) ->
+      callback err, stdout, stderr
+      
 exports.genSelfSigned = genSelfSigned
 exports.genKey = genKey
 exports.genCSR = genCSR
@@ -119,3 +130,5 @@ exports.initSerialFile = initSerialFile
 exports.verifyCSR = verifyCSR
 exports.signCSR = signCSR
 exports.getCertFingerprint = getCertFingerprint
+exports.sign = sign
+exports.verify = verify

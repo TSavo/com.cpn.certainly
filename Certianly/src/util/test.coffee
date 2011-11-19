@@ -47,27 +47,33 @@ class TestSuite
     me = this
     global.badExitString = "ERROR: Exited before we could run the tests" 
     process.on 'exit', @reportBadExit
+    process.on 'unhandledException', @reportBadExit
     @beforeSuite() if @beforeSuite
     @_next()
   
   next: ->
-    if @tests[@testCounter - 1].assert.failures.length == 0
+    if @tests[@testCounter].assert.failures.length == 0
       print "."
     else
       print "F"
+    ++@testCounter
+    global.badExitString = "ERROR: TestCase '#{@tests[@testCounter - 1].name}' caused us to exit in the 'after'!" 
     @after() if @after
     @_next()
     
   _next: ->
     if @testCounter == @tests.length
       puts ""
-      @report()
+      global.badExitString = "ERROR: We ran all the tests, but exited in the 'afterSuite'!" 
       @afterSuite() if @afterSuite
+      @report()
       process.removeListener "exit", @reportBadExit
+      process.removeListener "unhandledException", @reportBadExit
       return
+    global.badExitString = "ERROR: TestCase '#{@tests[@testCounter].name}' caused us to exit in the 'before'!" 
     @before() if @before
     global.badExitString = "ERROR: TestCase '#{@tests[@testCounter].name}' did not finish!" 
-    @tests[@testCounter++].run(this)
+    @tests[@testCounter].run(this)
   
   report: ->
     passed = 0
@@ -187,12 +193,11 @@ class SafeAssert
     me = this
     fs.stat file, (err, stat) ->
       try
-        if(err)
-          me.fail err
-        try
-          me.isTrue stat.size > 0, "We were expecting the file '#{file}' to be of non-zero length but it wasn't."
-        catch e
-          me.failures.push e
+        me.fail err if err
+        me.fail("We were expecting the file '#{file}' to be of non-zero length but it wasn't.") if stat.size == 0
+        ++me.succeeded
+      catch e
+        me.failures.push e
       finally
         callback() if callback
 
@@ -200,10 +205,13 @@ class SafeAssert
   fileAbsent : (file, callback) ->
     me = this
     fs.stat file, (err, stat) ->
-      if(!err)
-        me.fail("File #{file} exists but it shouldn't.") 
-      me.succeeded = me.succeeded + 1 
-      callback() if callback
+      try
+        if(!err)
+          me.fail("File #{file} exists but it shouldn't.")
+          return
+        ++me.succeeded 
+      finally
+        callback() if callback
   
   isError : (value, message) ->
     if assert.ifError(value)
