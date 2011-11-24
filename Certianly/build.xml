@@ -6,7 +6,6 @@
 		<exec executable="tools/node/node.exe">
 			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
 		</exec>
-		<delete file="-p" />
 	</target>
 	
 	<target name="test" depends="compile">
@@ -18,5 +17,14 @@
 	</target>
 	<target name="clean">
 		<delete dir="target/" file="**/*" includeemptydirs="true" failonerror="false" />
+		<mkdir dir="target/"/>
+	</target>
+	<target name="run">
+		<apply executable="tools/node/node.exe">
+			<arg value="--debug"/>
+			<fileset dir="target/">
+				<include name="**/index.js" />
+			</fileset>
+		</apply>
 	</target>
 </project>

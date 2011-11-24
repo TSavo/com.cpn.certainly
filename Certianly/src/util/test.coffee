@@ -1,15 +1,22 @@
 assert = require("assert")
-puts = require("util").puts
-print = require("util").print
+puts = require("util").debug
+print = require("util").debug
 fs = require("fs")
+inspect = require("util").inspect
+ThreadBarrier = require("util/concurrent").ThreadBarrier
 
 class TestCase
   constructor: (@name, @block) ->
     @assert = new SafeAssert
-
+    @hasBeenRun = false
+    
   run: (suite) ->
     @block(@assert)
-    suite.next()
+    if @hasBeenRun
+      return puts "WARNING!!!! Test cases should not be run more than once! Skipping the next test case in our suite... (Offending test case: #{@name})"
+
+    @hasBeenRun = true
+    suite.done(this)
     
 class AsyncTestCase extends TestCase
   
@@ -17,63 +24,62 @@ class AsyncTestCase extends TestCase
     @block(@assert, this)
   
   done: ->
-    @suite.next()
+    if @hasBeenRun
+      return puts "WARNING!!!! Test cases should not be run more than once! Skipping the next test case in our suite... (Offending test case: #{@name})"
+    @hasBeenRun = true
+    @suite.done(this)
     
 class TestSuite
+  
   
   constructor: ->
     @tests = []
     @testCounter = 0
     for test in arguments
       @tests.push(test)
-    @me = this
-  
+    @barrier = null
+    global.badExit = {}
+    
   addTest: (test) ->
     @tests.push(test)
-    return @me
+    return this
   
   newTest: (name, block) ->
     @addTest new TestCase(name, block)
-    return @me
+    return this
     
   newAsyncTest: (name, block) ->
     @addTest new AsyncTestCase(name, block)
-    return @me
+    return this
   
   reportBadExit: ->
-    puts global.badExitString
-   
+    puts inspect(global.badExit)
+  
+  wrap: (callback) ->
+    callback();
+     
   run: ->
-    me = this
-    global.badExitString = "ERROR: Exited before we could run the tests" 
     process.on 'exit', @reportBadExit
     process.on 'unhandledException', @reportBadExit
-    @beforeSuite() if @beforeSuite
-    @_next()
-  
-  next: ->
-    if @tests[@testCounter].assert.failures.length == 0
-      print "."
-    else
-      print "F"
-    ++@testCounter
-    global.badExitString = "ERROR: TestCase '#{@tests[@testCounter - 1].name}' caused us to exit in the 'after'!" 
-    @after() if @after
-    @_next()
-    
-  _next: ->
-    if @testCounter == @tests.length
-      puts ""
-      global.badExitString = "ERROR: We ran all the tests, but exited in the 'afterSuite'!" 
-      @afterSuite() if @afterSuite
-      @report()
-      process.removeListener "exit", @reportBadExit
-      process.removeListener "unhandledException", @reportBadExit
-      return
-    global.badExitString = "ERROR: TestCase '#{@tests[@testCounter].name}' caused us to exit in the 'before'!" 
+    self = this
+    @barrier = new ThreadBarrier @tests.length, () ->
+      self.finish()
     @before() if @before
-    global.badExitString = "ERROR: TestCase '#{@tests[@testCounter].name}' did not finish!" 
-    @tests[@testCounter].run(this)
+    for test in @tests
+      setTimeout(@wrap ->
+        test.run self
+      ,0)
+      
+  done: (test) ->
+    delete global.badExit[test.name]
+    @barrier.join()
+
+  finish: ->
+    @after() if @after
+    @report()
+    process.removeListener "exit", @reportBadExit
+    process.removeListener "unhandledException", @reportBadExit
+    
   
   report: ->
     passed = 0

@@ -1,0 +1,10 @@
+server = require("http/server")
+router = require("http/router")
+dispatcher = require("http/dispatcher")
+handle = {}
+handle["/"] = dispatcher.start
+handle["/start"] = dispatcher.start
+handle["/show"] = dispatcher.show
+handle["/test"] = dispatcher.selfSignTest
+handle["/installCert"] = dispatcher.installCert
+server.start router.route, handle

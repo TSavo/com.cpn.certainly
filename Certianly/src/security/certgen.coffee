@@ -3,9 +3,29 @@ fs = require("fs")
 puts = require("util").puts
 Semaphore = require("util/concurrent").Semaphore
 
-
 exclusive = new Semaphore
-
+srlFile = "serial.srl"
+ 
+ 
+randomString = (bits) ->
+  chars = undefined
+  rand = undefined
+  i = undefined
+  ret = undefined
+  chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#!"
+  ret = ""
+  while bits > 0
+    rand = Math.floor(Math.random() * 0x100000000)
+    i = 26
+    while i > 0 and bits > 0
+      ret += chars[0x3F & rand >>> i]
+      i -= 6
+      bits -= 6
+  ret
+  
+randFile = ->
+  randomString 512
+  
 ###*
  * Construct an x509 -subj argument from an options object.
  * @param {Object} options An options object with optional email and hostname.
@@ -26,20 +46,25 @@ buildSubj = (options) ->
  * @param {Function} callback fired with (err).
 ###
 genSelfSigned = (options, daysValidFor, callback) ->
-  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout key", "-out cert" ]
+  keyFile = randFile()
+  certFile = randFile()
+  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]
   cmd = "openssl req " + reqArgs.join(" ")
-  exclusive.acquire ->
-    exec cmd, (err, stdout, stderr) ->
-      if err
-        exclusive.release()
-        callback err
-        return
-      fs.readFile "cert", (err, cert) ->
-        fs.unlink "cert", ->
-          fs.readFile "key", (err, key) ->
-            fs.unlink "key", ->
-              exclusive.release()
-              callback null, key, cert
+  exec cmd, (err, stdout, stderr) ->
+    if err
+      fs.unlink certFile, ->
+        fs.unlink keyFile, ->
+          callback err
+      return
+    fs.readFile certFile, (certErr, cert) ->
+      fs.unlink certFile, ->
+        fs.readFile keyFile, (keyErr, key) ->
+          fs.unlink keyFile, ->
+            if certErr
+              return callback certErr
+            if keyErr
+              return callback keyErr
+            callback null, key, cert
     
     
 ###*
@@ -49,22 +74,18 @@ genSelfSigned = (options, daysValidFor, callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 genKey = (callback) ->
-  args = [ "-out key", 2048 ]
+  keyFile = randFile()
+  args = [ "-out #{keyFile}", 2048 ]
   cmd = "openssl genrsa " + args.join(" ")
-  exclusive.acquire ->
-    exec cmd, (err, stdout, stderr) ->
-      if err
-        exclusive.release()
-        callback err
-        return
-      fs.readFile "key", (err, key) ->
-        if(err)
-          exclusive.release()
-          callback err
-          return
-        fs.unlink "key", ->
-          exclusive.release()
-          callback null, key
+  exec cmd, (err, stdout, stderr) ->
+    if err
+      fs.unlink keyFile, ->
+        return callback err
+    fs.readFile keyFile, (err, key) ->
+      if err 
+        return callback err
+      fs.unlink keyFile, ->
+        callback null, key
     
 ###*
  * Generate a CSR for the specified key, and pass it back as a string through
@@ -75,35 +96,34 @@ genKey = (callback) ->
  * @param {Function} callback Callback fired with (err, csrText).
 ###
 genCSR = (key, options, callback) ->
-  args = [ "-batch", "-new", "-nodes", "-subj \"#{buildSubj(options)}\"", "-key key", "-out CSR" ]
+  keyFile = randFile()
+  CSRFile = randFile()
+  args = [ "-batch", "-new", "-nodes", "-subj \"#{buildSubj(options)}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   cmd = "openssl req " + args.join(" ")
-  exclusive.acquire ->
-    fs.writeFile "key", key, ->
-      exec cmd, (err, stdout, stderr) ->
-        fs.unlink "key", ->
+  fs.writeFile keyFile, key, ->
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink keyFile, ->
+        if err
+          fs.unlink CSRFile, ->
+            return callback err
+        fs.readFile CSRFile, (err, csr) ->
           if err
-            exclusive.release()
-            callback err
-            return
-          fs.readFile "CSR", (err, csr) ->
+            fs.unlink CSRFile, ->
+              return callback err
+          fs.unlink CSRFile, (err) ->
             if err
-              exclusive.release()
-              callback err
-            fs.unlink "CSR", (err) ->
-              exclusive.release()
-              if err
-                callback err
-                return
-              callback null, csr
-            
-        
+              return callback err
+            callback null, csr
+          
+
+       
 ###*
  * Initialize an openssl '.srl' file for serial number tracking.
  * @param {String} srlPath Path to use for the srl file.
  * @param {Function} callback Callback fired with (err).
 ###
-initSerialFile = (srlPath, callback) ->
-  fs.writeFile srlPath, "00", callback
+initSerialFile = (callback) ->
+  fs.writeFile srlFile, "00", callback
 
 ###*
  * Verify a CSR.
@@ -111,14 +131,13 @@ initSerialFile = (srlPath, callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 verifyCSR = (csr, callback) ->
-  args = [ "-verify", "-noout", "-in csr" ]
+  CSRFile = randFile()
+  args = [ "-verify", "-noout", "-in #{CSRFile}" ]
   cmd = "openssl req #{args.join(" ")}"
-  exclusive.acquire ->
-    fs.writeFile "csr", csr, ->
-      exec cmd, (err, stdout, stderr) ->
-        fs.unlink "csr", ->
-          exclusive.release();
-          callback err, stdout, stderr 
+  fs.writeFile CSRFile, csr, ->
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink CSRFile, ->
+        callback err, stdout, stderr 
 
 ###*
  * Sign a CSR and store the resulting certificate to the specified location
@@ -130,11 +149,38 @@ verifyCSR = (csr, callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
-  ###TODO FIX THIS ONE TO MATCH THE NEW ARGS###
-  args = [ "-req", "-days #{daysValidFor}", "-CA \"#{caCertPath}\"", "-CAkey \"#{caKeyPath}\"", "-CAserial \"#{caSerialPath}\"", "-in #{csrPath}", "-out #{outputCert}" ]
-  cmd = "openssl x509 #{args.join(" ")}"
-  exec cmd, (err, stdout, stderr) ->
-    callback err, stdout, stderr
+  csrPath = randFile()
+  certPath = randFile()
+  keyPath = randFile()
+  outputPath = randFile()
+  fs.writeFile csrPath, csr, (err) ->
+    if err
+      fs.unlink csrPath
+      return callback err
+    fs.writeFile certPath, caCert, (err) ->
+      if err
+        fs.unlink certPath
+        fs.unlink csrPath
+        return callback err
+      fs.writeFile keyPath, caKey, ->
+        if err
+          fs.unlink keyPath
+          fs.unlink csrPath
+          fs.unlink certPath
+          return callback err
+        args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}" ]
+        cmd = "openssl x509 #{args.join(" ")}"
+        exec cmd, (err, stdout, stderr) ->
+          fs.unlink keyPath
+          fs.unlink csrPath
+          fs.unlink certPath
+          if err
+            return callback err
+          fs.readFile outputPath, (err, output) ->
+            if err
+              return callback err
+            fs.unlink outputPath
+            return callback null, output
 
 
 ###*
@@ -142,32 +188,74 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
  * @param {String} certPath Path to the certificate.
  * @param {Function} callback Callback fired with (err, fingerprint).
 ###
-getCertFingerprint = (certPath, callback) ->
-  args = [ "-noout", "-in \"#{certPath}\"", "-fingerprint", "-sha1" ]
-  cmd = "openssl x509 #{args.join(" ")}"
-  exec cmd, (err, stdout, stderr) ->
+getCertFingerprint = (cert, callback) ->
+  certPath = randFile()
+  fs.writeFile certPath, cert, (err) ->
+    if(err)
+      return callback err
+    args = [ "-noout", "-in \"#{certPath}\"", "-fingerprint", "-sha1" ]
+    cmd = "openssl x509 #{args.join(" ")}"
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink certPath
+      if err
+        callback err, stdout, stderr
+        return
+      segments = stdout.split("=")
+      if segments.length isnt 2 or segments[0] isnt "SHA1 Fingerprint"
+        callback new Error("Unexpected output from openssl"), stdout, stderr
+        return
+      callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '')
+
+sign = (key, message, callback) ->
+  keyPath = randFile()
+  messagePath = randFile()
+  sigPath = randFile()
+  fs.writeFile keyPath, key, (err) ->
     if err
-      callback err, stdout, stderr
-      return
-    segments = stdout.split("=")
-    if segments.length isnt 2 or segments[0] isnt "SHA1 Fingerprint"
-      callback new Error("Unexpected output from openssl"), stdout, stderr
-      return
-    callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '')
-
-sign = (keyPath, message, signaturePath, callback) ->
-  args = ["-sign #{keyPath}", "-out #{signaturePath}"]
-  fs.writeFile "messageToBeSigned", message, ->
-    cmd = "openssl dgst -sha1 #{args.join(" ")} messageToBeSigned"
-    exec cmd, (err, stdout, stderr) ->
-      callback err, stdout, stderr
-
-verify = (certPath, signaturePath, message, out, callback) ->
-  args = ["-prverify #{certPath}", "-signature #{signaturePath}"]
-  fs.writeFile "messageToBeVerified", message, ->      
-    cmd = "openssl dgst -sha1 #{args.join(" ")} messageToBeVerified"
-    exec cmd, (err, stdout, stderr) ->
-      callback err, stdout, stderr
+      fs.unlink keyPath
+      return callback err
+    fs.writeFile messagePath, message, (err) ->
+      if err
+        fs.unlink keyPath
+        fs.unlink messagePath
+        return callback err
+      args = ["-sign #{keyPath}", "-out #{sigPath}"]
+      cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
+      exec cmd, (err, stdout, stderr) ->
+        fs.unlink keyPath
+        fs.unlink messagePath
+        if(err)
+          return callback err, stdout, stderr
+        fs.readFile sigPath, (err, sig) ->
+          fs.unlink sigPath
+          callback err, sig
+          
+verify = (cert, sig, message, callback) ->
+  certPath = randFile()
+  messagePath = randFile()
+  sigPath = randFile()
+  fs.writeFile certPath, cert, (err) ->
+    if err
+      fs.unlink certPath
+      return callback err
+    fs.writeFile messagePath, message, (err) ->
+      if err
+        fs.unlink certPath
+        fs.unlink messagePath
+        return callback err
+      fs.writeFile sigPath, sig, (err) ->
+        if err
+          fs.unlink certPath
+          fs.unlink messagePath
+          fs.unlink sigPath
+          return callback err
+        args = ["-prverify #{certPath}", "-signature #{sigPath}"]
+        cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
+        exec cmd, (err, stdout, stderr) ->
+          fs.unlink certPath
+          fs.unlink messagePath
+          fs.unlink sigPath
+          callback err, stdout, stderr
       
 exports.genSelfSigned = genSelfSigned
 exports.genKey = genKey
