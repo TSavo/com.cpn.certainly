@@ -17,11 +17,11 @@ class Semaphore
       @waiting.push block
     else
       @inUse = true
-      setTimeout block, 0
+      block()
       
   release: ->
     if @waiting.length > 0
-      setTimeout @waiting.shift(), 0
+      @waiting.shift()()
     else
       @inUse = false
    

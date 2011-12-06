@@ -2,6 +2,7 @@ exec = require("child_process").exec
 fs = require("fs")
 puts = require("util").puts
 Semaphore = require("util/concurrent").Semaphore
+ThreadBarrier = require("util/concurrent").ThreadBarrier
 
 exclusive = new Semaphore
 srlFile = "serial.srl"
@@ -48,24 +49,27 @@ buildSubj = (options) ->
 genSelfSigned = (options, daysValidFor, callback) ->
   keyFile = randFile()
   certFile = randFile()
-  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{buildSubj(options)}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]
+  if typeof options == "object"
+    options = buildSubj options
+  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{options}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]    
   cmd = "openssl req " + reqArgs.join(" ")
   exec cmd, (err, stdout, stderr) ->
     if err
-      fs.unlink certFile, ->
-        fs.unlink keyFile, ->
-          callback err
+      fs.unlink certFile
+      fs.unlink keyFile
+      callback err
       return
-    fs.readFile certFile, (certErr, cert) ->
-      fs.unlink certFile, ->
-        fs.readFile keyFile, (keyErr, key) ->
-          fs.unlink keyFile, ->
-            if certErr
-              return callback certErr
-            if keyErr
-              return callback keyErr
-            callback null, key, cert
-    
+    key=cert=""
+    ThreadBarrier b = new ThreadBarrier 2, ->
+      callback null, key, cert
+    fs.readFile certFile, (certErr, myCert) ->
+      fs.unlink certFile
+      cert = myCert
+      b.join()  
+    fs.readFile keyFile, (keyErr, myKey) ->
+      fs.unlink keyFile
+      key = myKey
+      b.join()        
     
 ###*
  * Generate an RSA key.
@@ -79,13 +83,13 @@ genKey = (callback) ->
   cmd = "openssl genrsa " + args.join(" ")
   exec cmd, (err, stdout, stderr) ->
     if err
-      fs.unlink keyFile, ->
-        return callback err
+      fs.unlink keyFile
+      return callback err        
     fs.readFile keyFile, (err, key) ->
+      fs.unlink keyFile
       if err 
         return callback err
-      fs.unlink keyFile, ->
-        callback null, key
+      callback null, key
     
 ###*
  * Generate a CSR for the specified key, and pass it back as a string through
@@ -98,22 +102,16 @@ genKey = (callback) ->
 genCSR = (key, options, callback) ->
   keyFile = randFile()
   CSRFile = randFile()
-  args = [ "-batch", "-new", "-nodes", "-subj \"#{buildSubj(options)}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
+  if typeof options == "object"
+    options = buildSubj options
+  args = [ "-batch", "-new", "-nodes", "-subj \"#{options}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   cmd = "openssl req " + args.join(" ")
   fs.writeFile keyFile, key, ->
     exec cmd, (err, stdout, stderr) ->
-      fs.unlink keyFile, ->
-        if err
-          fs.unlink CSRFile, ->
-            return callback err
-        fs.readFile CSRFile, (err, csr) ->
-          if err
-            fs.unlink CSRFile, ->
-              return callback err
-          fs.unlink CSRFile, (err) ->
-            if err
-              return callback err
-            callback null, csr
+      fs.unlink keyFile        
+      fs.readFile CSRFile, (err, csr) ->
+        fs.unlink CSRFile
+        callback null, csr
           
 
        
@@ -136,8 +134,8 @@ verifyCSR = (csr, callback) ->
   cmd = "openssl req #{args.join(" ")}"
   fs.writeFile CSRFile, csr, ->
     exec cmd, (err, stdout, stderr) ->
-      fs.unlink CSRFile, ->
-        callback err, stdout, stderr 
+      fs.unlink CSRFile
+      callback err, stdout, stderr 
 
 ###*
  * Sign a CSR and store the resulting certificate to the specified location
@@ -153,35 +151,27 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
   certPath = randFile()
   keyPath = randFile()
   outputPath = randFile()
-  fs.writeFile csrPath, csr, (err) ->
-    if err
+  barrier = new ThreadBarrier 3, ->
+    args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}" ]
+    cmd = "openssl x509 #{args.join(" ")}"
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink keyPath
       fs.unlink csrPath
-      return callback err
-    fs.writeFile certPath, caCert, (err) ->
+      fs.unlink certPath
       if err
-        fs.unlink certPath
-        fs.unlink csrPath
         return callback err
-      fs.writeFile keyPath, caKey, ->
+      fs.readFile outputPath, (err, output) ->
+        fs.unlink outputPath
         if err
-          fs.unlink keyPath
-          fs.unlink csrPath
-          fs.unlink certPath
           return callback err
-        args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}" ]
-        cmd = "openssl x509 #{args.join(" ")}"
-        exec cmd, (err, stdout, stderr) ->
-          fs.unlink keyPath
-          fs.unlink csrPath
-          fs.unlink certPath
-          if err
-            return callback err
-          fs.readFile outputPath, (err, output) ->
-            if err
-              return callback err
-            fs.unlink outputPath
-            return callback null, output
+        return callback null, output
 
+  fs.writeFile csrPath, csr, (err) ->
+    barrier.join()
+  fs.writeFile certPath, caCert, (err) ->
+    barrier.join()
+  fs.writeFile keyPath, caKey, (err) ->
+    barrier.join()    
 
 ###*
  * Retrieve a SHA1 fingerprint of a certificate.
@@ -210,53 +200,43 @@ sign = (key, message, callback) ->
   keyPath = randFile()
   messagePath = randFile()
   sigPath = randFile()
-  fs.writeFile keyPath, key, (err) ->
-    if err
+  barrier = new ThreadBarrier 2, ->
+    args = ["-sign #{keyPath}", "-out #{sigPath}"]
+    cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
+    exec cmd, (err, stdout, stderr) ->
       fs.unlink keyPath
-      return callback err
-    fs.writeFile messagePath, message, (err) ->
-      if err
-        fs.unlink keyPath
-        fs.unlink messagePath
-        return callback err
-      args = ["-sign #{keyPath}", "-out #{sigPath}"]
-      cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
-      exec cmd, (err, stdout, stderr) ->
-        fs.unlink keyPath
-        fs.unlink messagePath
-        if(err)
-          return callback err, stdout, stderr
-        fs.readFile sigPath, (err, sig) ->
-          fs.unlink sigPath
-          callback err, sig
-          
+      fs.unlink messagePath
+      if(err)
+        return callback err, stdout, stderr
+      fs.readFile sigPath, (err, sig) ->
+        fs.unlink sigPath
+        callback err, sig
+      
+  fs.writeFile keyPath, key, (err) ->
+    barrier.join()
+  fs.writeFile messagePath, message, (err) ->
+    barrier.join()
+            
 verify = (cert, sig, message, callback) ->
   certPath = randFile()
   messagePath = randFile()
   sigPath = randFile()
-  fs.writeFile certPath, cert, (err) ->
-    if err
+  barrier = new ThreadBarrier 3, ->
+    args = ["-prverify #{certPath}", "-signature #{sigPath}"]
+    cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
+    exec cmd, (err, stdout, stderr) ->
       fs.unlink certPath
-      return callback err
-    fs.writeFile messagePath, message, (err) ->
-      if err
-        fs.unlink certPath
-        fs.unlink messagePath
-        return callback err
-      fs.writeFile sigPath, sig, (err) ->
-        if err
-          fs.unlink certPath
-          fs.unlink messagePath
-          fs.unlink sigPath
-          return callback err
-        args = ["-prverify #{certPath}", "-signature #{sigPath}"]
-        cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
-        exec cmd, (err, stdout, stderr) ->
-          fs.unlink certPath
-          fs.unlink messagePath
-          fs.unlink sigPath
-          callback err, stdout, stderr
-      
+      fs.unlink messagePath
+      fs.unlink sigPath
+      callback err, stdout, stderr
+    
+  fs.writeFile certPath, cert, (err) ->
+    barrier.join()
+  fs.writeFile messagePath, message, (err) ->
+    barrier.join()    
+  fs.writeFile sigPath, sig, (err) ->
+    barrier.join()
+    
 exports.genSelfSigned = genSelfSigned
 exports.genKey = genKey
 exports.genCSR = genCSR

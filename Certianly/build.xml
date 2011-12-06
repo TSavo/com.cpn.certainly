@@ -27,4 +27,9 @@
 			</fileset>
 		</apply>
 	</target>
+	<target name="die">
+		<get dest="dieResults.html">
+		  <url url="http://localhost:8888/dieAHorribleDeath"/> 
+		</get>
+	</target>
 </project>

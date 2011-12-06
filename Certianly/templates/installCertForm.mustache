@@ -1,0 +1,43 @@
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	</head>
+	<body>
+		<form action="/cert/install" method="post">
+			<table>
+				<thead>
+					<tr>
+						<td>
+							Name
+						</td>
+						<td>
+							Certificate
+						</td>
+						<td>
+							Key
+						</td>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>
+							<textarea type="textarea" name="certname" ></textarea>
+
+						</td>
+						<td>
+							<textarea type="textarea" name="cert" ></textarea>
+						</td>
+						<td>
+							<textarea type="textarea" name="key" ></textarea>
+						</td>
+					</tr>
+					<tr rowspan=3>
+						<td>
+							<input type="submit" value="Upload file" />
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</form>
+	</body>
+</html>

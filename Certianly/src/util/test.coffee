@@ -55,9 +55,7 @@ class TestSuite
   reportBadExit: ->
     puts inspect(global.badExit)
   
-  wrap: (callback) ->
-    callback();
-     
+
   run: ->
     process.on 'exit', @reportBadExit
     process.on 'unhandledException', @reportBadExit
@@ -66,9 +64,10 @@ class TestSuite
       self.finish()
     @before() if @before
     for test in @tests
-      setTimeout(@wrap ->
-        test.run self
-      ,0)
+      do (test) ->
+        setTimeout(->
+          test.run self
+        ,0)
       
   done: (test) ->
     delete global.badExit[test.name]
@@ -226,7 +225,7 @@ class SafeAssert
       ++@succeeded
       
   isNotError : (value, message) ->
-    if !assert.ifError(value)
+    if value
       @fail(message)
     else
       ++@succeeded
