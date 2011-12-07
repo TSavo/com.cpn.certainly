@@ -1,5 +1,5 @@
 TestSuite = require("util/test").TestSuite
-parser = require("http/querystring").parser
+parser = require("http/parameters").querystring
 
 suite = new TestSuite 
 

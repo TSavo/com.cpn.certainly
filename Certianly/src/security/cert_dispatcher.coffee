@@ -3,7 +3,7 @@ view = require("http/mustache").view
 ThreadBarrier = require("util/concurrent").ThreadBarrier
 puts = require("util").debug
 inspect = require("util").inspect
-form = require("http/form").parser
+parameters = require("http/parameters").parameters
 certgen = require("security/certgen")
   
 reportError = (response, error) ->
@@ -16,10 +16,8 @@ showCerts = (response, request) ->
     fi = []
     puts files.length
     barrier = new ThreadBarrier files.length, () ->
-      puts inspect fi
       view("showCerts", {certs:fi})(response, request)
     for f in files
-      puts f
       do (f) -> 
         fs.stat "certs/#{f}", (err, stats) ->
           fi.push {name:"#{f}", size:stats.size}
@@ -32,27 +30,25 @@ notPresent = (formValues, required) ->
   return false
 
 genCA = (response, request) ->
-  form request, (formValues) ->
-    try
-      error = null
-      if error = notPresent formValues, ["certName", "subject", "daysValidFor"]
-        return reportError response, "You must supply a #{error}"
-      puts formValues.subject
-      puts formValues.daysValidFor
-      certgen.genSelfSigned formValues.subject, formValues.daysValidFor, (err, key, cert)->
-        puts "Came back"
-        if err
-          return reportError response, err
-        barrier = new ThreadBarrier 2, ->
-          response.write JSON.stringify {key:key.toString(), cert:cert.toString()}
-          response.end()  
-        fs.writeFile "certs/#{formValues.certName}.key", key, ->
-          barrier.join()
-        fs.writeFile "certs/#{formValues.certName}.cert", cert, ->
-          barrier.join()
+  parameters request, (formValues) ->
+    error = null
+    if error = notPresent formValues, ["certName", "subject", "daysValidFor"]
+      return reportError response, "You must supply a #{error}"
+    puts formValues.subject
+    puts formValues.daysValidFor
+    certgen.genSelfSigned formValues.subject, formValues.daysValidFor, (err, key, cert)->
+      if err
+        return reportError response, err
+      barrier = new ThreadBarrier 2, ->
+        response.write JSON.stringify {success:true}
+        response.end()  
+      fs.writeFile "certs/#{formValues.certName}.key", key, ->
+        barrier.join()
+      fs.writeFile "certs/#{formValues.certName}.cert", cert, ->
+        barrier.join()
 
 newCert = (response, request) ->
-  form request, (formValues) ->
+  parameters request, (formValues) ->
     if error = notPresent formValues, ["ca", "subject", "daysValidFor"]
       return reportError response, "You must supply a #{error}"
     caCert=caKey=""
@@ -73,7 +69,7 @@ newCert = (response, request) ->
       barrier.join()
 
 bundleCerts = (response, request) ->
-  form request, (formValues) ->
+  parameters request, (formValues) ->
     if error = notPresent formValues, ["bundlePath"]
       return reportError response, "You must supply a #{error}"
     bundlePath = formValues.bundlePath.split(" ")
@@ -94,7 +90,7 @@ bundleCerts = (response, request) ->
           barrier.join()
                    
 newSigner = (response, request) ->
-  form request, (formValues) ->
+  parameters request, (formValues) ->
     if error = notPresent formValues, ["ca", "certName", "subject", "daysValidFor"]
       return reportError response, "You must supply a #{error}"
     caCert=caKey=""
@@ -105,7 +101,7 @@ newSigner = (response, request) ->
             certgen.signCSR csr.toString(), caCert, caKey, 1095, (err, finalCert) ->
               response.writeHead 200, { 'Content-Type': 'application/json' }
               barrier = new ThreadBarrier 2, ->
-                response.write JSON.stringify {key:key.toString(), cert:finalCert.toString()}
+                response.write JSON.stringify {success:true}
                 response.end()  
               fs.writeFile "certs/#{formValues.certName}.key", key, ->
                 barrier.join()
@@ -119,7 +115,7 @@ newSigner = (response, request) ->
       barrier.join()
 
 installCert = (response, request) ->
-  form request, (parser) ->
+  parameters request, (parser) ->
     try
       puts inspect parser
       unless parser.certname
