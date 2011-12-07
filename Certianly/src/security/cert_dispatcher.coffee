@@ -35,7 +35,7 @@ genCA = (response, request) ->
   form request, (formValues) ->
     try
       error = null
-      if error = notPresent formValues, ["subject", "daysValidFor"]
+      if error = notPresent formValues, ["certName", "subject", "daysValidFor"]
         return reportError response, "You must supply a #{error}"
       puts formValues.subject
       puts formValues.daysValidFor
@@ -43,9 +43,13 @@ genCA = (response, request) ->
         puts "Came back"
         if err
           return reportError response, err
-        response.writeHead 200, { 'Content-Type': 'application/json' }
-        response.write JSON.stringify {key:key.toString(), cert:cert.toString()}
-        response.end()
+        barrier = new ThreadBarrier 2, ->
+          response.write JSON.stringify {key:key.toString(), cert:cert.toString()}
+          response.end()  
+        fs.writeFile "certs/#{formValues.certName}.key", key, ->
+          barrier.join()
+        fs.writeFile "certs/#{formValues.certName}.cert", cert, ->
+          barrier.join()
 
 newCert = (response, request) ->
   form request, (formValues) ->

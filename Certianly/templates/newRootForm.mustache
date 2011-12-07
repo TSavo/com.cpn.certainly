@@ -3,10 +3,13 @@
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 	</head>
 	<body>
-		<form action="/cert/genCA" method="POST">
+		<form action="/cert/root" method="POST">
 			<table>
 				<thead>
 					<tr>
+						<td>
+							Name
+						</td>
 						<td>
 							Subject
 						</td>
@@ -18,8 +21,10 @@
 				<tbody>
 					<tr>
 						<td>
+							<textarea type="textarea" name="certName" ></textarea>
+						</td>
+						<td>
 							<textarea type="textarea" name="subject" ></textarea>
-
 						</td>
 						<td>
 							<textarea type="textarea" name="daysValidFor" ></textarea>
