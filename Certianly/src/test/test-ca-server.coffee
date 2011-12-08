@@ -54,7 +54,7 @@ suite.newAsyncTest "We can generate a root, a new key and CSR, and get it signed
               assert.isTrue data.cert.length > 0
               assert.isTrue data.key.length > 0
               test.done()
-            
+
 suite.after = ->
   client.get "/dieAHorribleDeath", (data) ->
   files = fs.readdirSync "certs"
@@ -65,6 +65,5 @@ suite.after = ->
 
 fs.rename "certs", "certs.backup"
 fs.mkdir "certs"
- 
 suite.run()
 

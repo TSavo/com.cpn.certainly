@@ -57,10 +57,15 @@ suite.newAsyncTest "We can initialize our serial file", (assert, test) ->
 suite.newAsyncTest "We can sign a cert using another cert + key and a verified CSR", (assert, test) ->
   certgen.initSerialFile -> 
     certgen.genSelfSigned {"email":"test@test.com", "hostname":"test.com"}, 1095, (err, signerKey, cert) ->
+      assert.isNull err
       certgen.genKey (err, key) ->
+        assert.isNull err
         certgen.genCSR key, {"email":"test@test.com", "hostname":"test.com"}, (err, csr) ->
+          assert.isNull err
           certgen.verifyCSR csr, (err) ->
+            assert.isNull err
             certgen.signCSR csr, cert, signerKey, 1095, (err, finalCert) ->
+              assert.isNull err
               assert.isTrue finalCert.toString().indexOf("BEGIN CERTIFICATE") > 0, "We expected our cert to be in a valid format: #{finalCert}"
               test.done()
 

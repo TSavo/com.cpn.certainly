@@ -12,6 +12,8 @@ class HttpClient
       result.on "data", (chunk) ->
         body += chunk
       result.on "end", ->
+        if result.headers["content-type"] is "application/json"
+          body = JSON.parse body
         callback body
     )
   
