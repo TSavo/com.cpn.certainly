@@ -9,9 +9,13 @@ app.addPage("/cert",
 ).addPage("/cert/install",
   GET:view("installCertForm"),
   POST:cert_dispatcher.installCert
-).addPage("/cert/signer",
+).addPage("/cert/csr",
   GET:view("newSignerForm"),
+  POST:cert_dispatcher.newCSR
+).addPage("/cert/signer",
   POST:cert_dispatcher.newSigner
+).addPage("/cert/sign",
+  POST:cert_dispatcher.signCSR
 ).addPage("/cert/root",
   GET:view("newRootForm"),
   POST:cert_dispatcher.genCA
@@ -22,5 +26,6 @@ app.addPage("/cert",
   GET:(response, request)->
     response.write "What a world... what a world..."
     response.end()
-    process.exit()
+    app.stop()
 ).start()
+exports.app = app

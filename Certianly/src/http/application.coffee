@@ -9,6 +9,9 @@ class Application
     this
 
   start: ->
-    server.start router.route, @pages
+    @server = server.start router.route, @pages
+    
+  stop: ->
+    @server.close() if @server
     
 exports.Application = Application

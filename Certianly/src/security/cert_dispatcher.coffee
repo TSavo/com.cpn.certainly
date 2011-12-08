@@ -34,18 +34,47 @@ genCA = (response, request) ->
     error = null
     if error = notPresent formValues, ["certName", "subject", "daysValidFor"]
       return reportError response, "You must supply a #{error}"
-    puts formValues.subject
-    puts formValues.daysValidFor
     certgen.genSelfSigned formValues.subject, formValues.daysValidFor, (err, key, cert)->
       if err
         return reportError response, err
       barrier = new ThreadBarrier 2, ->
+        response.writeHead 200, { 'content-type': 'application/json' }
         response.write JSON.stringify {success:true}
         response.end()  
       fs.writeFile "certs/#{formValues.certName}.key", key, ->
         barrier.join()
       fs.writeFile "certs/#{formValues.certName}.cert", cert, ->
         barrier.join()
+
+newCSR = (response, request) ->
+  parameters request, (formValues) ->
+    if error = notPresent formValues, ["certName", "subject", "daysValidFor"]
+      return reportError response, "You must supply a #{error}"
+    certgen.initSerialFile ->
+      certgen.genKey (err, key) ->
+        certgen.genCSR key.toString(), formValues.subject, (err, csr) ->
+          fs.writeFile "certs/#{formValues.certName}.key", key, ->
+            response.writeHead 200, { 'Content-Type': 'application/json' }
+            response.write JSON.stringify {certName:formValues.certName, csr:csr.toString()}
+            response.end()
+
+signCSR = (response, request) ->
+  parameters request, (formValues) ->
+    caCert=caKey=""
+    if error = notPresent formValues, ["csr", "ca"]
+      return reportError response, "You must supply a #{error}"
+    barrier = new ThreadBarrier 2, ->
+      certgen.signCSR formValues.csr.toString(), caCert, caKey, 1095, (err, finalCert) ->
+        response.writeHead 200, { 'Content-Type': 'application/json' }
+        response.write JSON.stringify {cert:finalCert.toString()}
+        response.end()
+    fs.readFile "certs/#{formValues.ca}.cert", (err, myCert) ->
+      caCert = myCert.toString()
+      barrier.join()
+    fs.readFile "certs/#{formValues.ca}.key", (err, myKey) ->
+      caKey = myKey.toString()
+      barrier.join()
+
 
 newCert = (response, request) ->
   parameters request, (formValues) ->
@@ -116,29 +145,21 @@ newSigner = (response, request) ->
 
 installCert = (response, request) ->
   parameters request, (parser) ->
-    try
-      puts inspect parser
-      unless parser.certname
-        return reportError response, "You must supply a name."
-      unless parser.cert
-        return reportError response, "You must supply a certificate"
-      unless parser.key
-        return reportError response, "You must supply a key"
-        
-      fs.writeFile "certs/#{parser.certname}.cert", parser.cert, (err) ->
-        puts err
-      fs.writeFile "certs/#{parser.certname}.key", parser.key, (err) ->
-        puts err
-      response.writeHead 200
-      response.write "Successfully installed #{parser.certname}"
-    catch e
-      response.write "Failed: #{e}"
-    finally
-      response.end() 
+    unless parser.certName
+      return reportError response, "You must supply a name."
+    unless parser.cert
+      return reportError response, "You must supply a certificate"
       
+    fs.writeFile "certs/#{parser.certName}.cert", parser.cert, (err) ->
+      response.writeHead 200, { 'content-type': 'application/json' }
+      response.write JSON.stringify {success:true}
+      response.end() 
+    
 exports.installCert = installCert
 exports.showCerts = showCerts
 exports.genCA = genCA
 exports.newCert = newCert
 exports.newSigner = newSigner
 exports.bundleCerts = bundleCerts
+exports.newCSR = newCSR
+exports.signCSR = signCSR

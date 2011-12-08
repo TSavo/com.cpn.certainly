@@ -1,4 +1,5 @@
-url = require('url') ;
+url = require('url')
+puts = require("util").debug
 
 parameters = (request, callback) ->
   query = querystring request
@@ -10,12 +11,11 @@ parameters = (request, callback) ->
 
 form = (request, callback) ->
   body = ""
-  if request.method in ["POST", "PUT", "DELETE"] and request.headers["content-type"] in ["application/x-www-form-urlencoded", "application/json"]
-    request.on "data", (chunk) ->
-      body += chunk
+  request.on "data", (chunk) ->
+    body += chunk
 
   request.on "end", ->
-    if request["content-type"] is "application/x-www-form-urlencoded"
+    if request.headers["content-type"] is "application/x-www-form-urlencoded"
       params = body.split("&")
       o = {}
       for param of params
@@ -26,7 +26,7 @@ form = (request, callback) ->
       for key, val of o
         result[key] = val
       callback result    
-    else if request["content-type"] is "application/json"
+    else if request.headers["content-type"] is "application/json"
       callback JSON.parse body
     else
       puts "ERROR: unknown content type: #{request["content-type"]}"

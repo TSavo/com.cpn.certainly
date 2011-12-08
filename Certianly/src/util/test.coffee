@@ -28,6 +28,9 @@ class AsyncTestCase extends TestCase
       return puts "WARNING!!!! Test cases should not be run more than once! Skipping the next test case in our suite... (Offending test case: #{@name})"
     @hasBeenRun = true
     @suite.done(this)
+  
+global.badExitHandler = ->
+  puts inspect(global.badExit)
     
 class TestSuite
   
@@ -52,13 +55,11 @@ class TestSuite
     @addTest new AsyncTestCase(name, block)
     return this
   
-  reportBadExit: ->
-    puts inspect(global.badExit)
   
 
   run: ->
-    process.on 'exit', @reportBadExit
-    process.on 'unhandledException', @reportBadExit
+    process.on 'exit', global.badExitHandler
+    process.on 'unhandledException', global.badExitHandler
     self = this
     @barrier = new ThreadBarrier @tests.length, () ->
       self.finish()
@@ -74,10 +75,10 @@ class TestSuite
     @barrier.join()
 
   finish: ->
-    @after() if @after
     @report()
-    process.removeListener "exit", @reportBadExit
-    process.removeListener "unhandledException", @reportBadExit
+    process.removeListener "exit", global.badExitHandler
+    process.removeListener "unhandledException", global.badExitHandler
+    @after() if @after
     
   
   report: ->
