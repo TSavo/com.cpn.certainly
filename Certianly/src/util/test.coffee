@@ -70,6 +70,7 @@ class TestSuite
           test.run self
         ,0)
       
+     
   done: (test) ->
     delete global.badExit[test.name]
     @barrier.join()
@@ -195,29 +196,26 @@ class SafeAssert
     catch e
       @failures.push e
      
-  fileExists : (file, callback) ->
+  fileExists : (file) ->
     me = this
-    fs.stat file, (err, stat) ->
-      try
-        me.fail err if err
-        me.fail("We were expecting the file '#{file}' to be of non-zero length but it wasn't.") if stat.size == 0
-        ++me.succeeded
-      catch e
-        me.failures.push e
-      finally
-        callback() if callback
+    stat = fs.statSync file
+    try
+      me.fail("We were expecting the file '#{file}' to be of non-zero length but it wasn't.") if stat.size == 0
+      ++me.succeeded
+    catch e
+      me.failures.push e
+    
 
 
-  fileAbsent : (file, callback) ->
+  fileAbsent : (file) ->
     me = this
-    fs.stat file, (err, stat) ->
-      try
-        if(!err)
-          me.fail("File #{file} exists but it shouldn't.")
-          return
-        ++me.succeeded 
-      finally
-        callback() if callback
+    try
+      stat = fs.statSync file
+      me.fail("File #{file} exists but it shouldn't.")
+      return
+    catch e
+      ++me.succeeded 
+   
   
   isError : (value, message) ->
     if assert.ifError(value)

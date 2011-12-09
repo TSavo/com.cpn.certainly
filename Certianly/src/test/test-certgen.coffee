@@ -48,11 +48,10 @@ suite.newAsyncTest "Verifying a bad CSR will fail", (assert, test) ->
     assert.isTrue(err, "We expected it to fail when verifying a non-existent CSR")
     test.done()
     
-
 suite.newAsyncTest "We can initialize our serial file", (assert, test) ->
   certgen.initSerialFile  ->
-    assert.fileExists "serial.srl", ->
-      test.done()
+    assert.fileExists "serial.srl"
+    test.done()
 
 suite.newAsyncTest "We can sign a cert using another cert + key and a verified CSR", (assert, test) ->
   certgen.initSerialFile -> 

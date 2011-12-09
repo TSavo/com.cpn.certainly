@@ -225,6 +225,7 @@ Renderer:: =
     regex
 
 
+
 to_html = (template, view, partials, send_fun) ->
   renderer = new Renderer()
   renderer.send = send_fun  if send_fun
@@ -253,7 +254,6 @@ render_partial = (response, partialName, view, partials, callback) ->
     
 view = (partialName, context) ->
   (response, request) ->
-    puts partialName
     render_partial response, partialName, context, null, ->
       response.end()
       
