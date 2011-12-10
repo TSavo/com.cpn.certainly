@@ -3,13 +3,13 @@
 <project default="test" basedir=".">
 
 	<target name="compile" depends="clean">
-		<exec executable="tools/node/node.exe">
+		<exec executable="node">
 			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
 		</exec>
 	</target>
 	
 	<target name="test" depends="compile">
-		<apply executable="tools/node/node.exe">
+		<apply executable="node">
 			<fileset dir="target/test/">
 				<include name="**/*.js"></include>	
 			</fileset>
@@ -20,7 +20,7 @@
 		<mkdir dir="target/"/>
 	</target>
 	<target name="run">
-		<apply executable="tools/node/node.exe">
+		<apply executable="node">
 			<arg value="--debug"/>
 			<fileset dir="target/">
 				<include name="**/index.js" />
