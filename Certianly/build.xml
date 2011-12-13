@@ -1,15 +1,21 @@
 <?xml version="1.0"?>
 
 <project default="test" basedir=".">
-
+	<condition property="node.exec" value="tools/node/node.exe">
+	   <os family="windows"/>
+	</condition>
+	<condition property="node.exec" value="node">
+	   <os family="unix"/>
+	</condition>
+	
 	<target name="compile" depends="clean">
-		<exec executable="node">
+		<exec executable="${node.exec}">
 			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
 		</exec>
 	</target>
 	
 	<target name="test" depends="compile">
-		<apply executable="node">
+		<apply executable="${node.exec}">
 			<fileset dir="target/test/">
 				<include name="**/*.js"></include>	
 			</fileset>
@@ -20,7 +26,7 @@
 		<mkdir dir="target/"/>
 	</target>
 	<target name="run">
-		<apply executable="node">
+		<apply executable="${node.exec}">
 			<arg value="--debug"/>
 			<fileset dir="target/">
 				<include name="**/index.js" />
