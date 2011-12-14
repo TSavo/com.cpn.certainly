@@ -112,7 +112,7 @@ genCSR = (key, options, callback) ->
       return callback "Error while executing: #{cmd}\n#{err}" if err
       fs.unlink keyFile        
       fs.readFile CSRFile, (err, csr) ->
-        return err if err
+        return callback err if err
         fs.unlink CSRFile
         callback null, csr
           
