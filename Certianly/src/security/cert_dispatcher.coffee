@@ -9,7 +9,7 @@ certgen = require("security/certgen")
 reportError = (response, error) ->
   puts error
   response.writeHead 400
-  response.write error
+  response.write error.toString()
   response.end()
 
 showCerts = (response, request) ->
