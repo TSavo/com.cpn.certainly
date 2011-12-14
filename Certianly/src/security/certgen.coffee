@@ -107,9 +107,12 @@ genCSR = (key, options, callback) ->
   args = [ "-batch", "-new", "-nodes", "-subj \"#{options}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   cmd = "openssl req " + args.join(" ")
   fs.writeFile keyFile, key, ->
+    return callback err if err
     exec cmd, (err, stdout, stderr) ->
+      return callback "Error while executing: #{cmd}\n#{err}" if err
       fs.unlink keyFile        
       fs.readFile CSRFile, (err, csr) ->
+        return err if err
         fs.unlink CSRFile
         callback null, csr
           
