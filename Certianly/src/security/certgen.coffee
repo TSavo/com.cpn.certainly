@@ -159,7 +159,7 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
       fs.unlink csrPath
       fs.unlink certPath
       if err
-        return callback "Error while executing: ${err}\n#{err}"
+        return callback "Error while executing: #{cmd}\n#{err}"
       fs.readFile outputPath, (err, output) ->
         fs.unlink outputPath
         if err
