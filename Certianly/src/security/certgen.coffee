@@ -106,7 +106,7 @@ genCSR = (key, options, callback) ->
     options = buildSubj options
   args = [ "-batch", "-new", "-nodes", "-subj \"#{options}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   cmd = "openssl req " + args.join(" ")
-  fs.writeFile keyFile, key, ->
+  fs.writeFile keyFile, key, (err) ->
     return callback err if err
     exec cmd, (err, stdout, stderr) ->
       return callback "Error while executing: #{cmd}\n#{err}" if err
