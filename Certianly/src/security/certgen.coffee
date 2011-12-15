@@ -13,7 +13,7 @@ randomString = (bits) ->
   rand = undefined
   i = undefined
   ret = undefined
-  chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#!"
+  chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345678901"
   ret = ""
   while bits > 0
     rand = Math.floor(Math.random() * 0x100000000)
