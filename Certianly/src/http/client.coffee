@@ -2,7 +2,7 @@ http = require("http")
 
 class HttpClient
   constructor: (@host, @port) ->
-  get:(path, callback)->
+  get:(path, callback = ->)->
     http.get(
       host:@host
       port:@port
@@ -14,17 +14,17 @@ class HttpClient
       result.on "end", ->
         if result.headers["content-type"] is "application/json"
           body = JSON.parse body
-        callback body
+        callback body if callback?
     )
   
-  post:(path, data, callback) ->
+  post:(path, data, callback = ->) ->
     this.send path, data, "POST", callback
-  put:(path, data, callback) ->
+  put:(path, data, callback = ->) ->
     this.send path, data, "PUT", callback
-  delete:(path, data, callback) ->
+  delete:(path, data, callback = ->) ->
     this.send path, data, "DELETE", callback
   
-  send:(path, data, method, callback)->
+  send:(path, data, method, callback = ->)->
     request = http.request(
       host:@host
       port:@port

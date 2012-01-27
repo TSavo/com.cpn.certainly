@@ -1,15 +1,16 @@
 url = require('url')
 puts = require("util").debug
+inspect = require("util").inspect
 
-parameters = (request, callback) ->
+parameters = (request, callback = ->) ->
   query = querystring request
   form request, (data) ->
     if typeof data is "object"
       for key, val of data
         query[key] = val
-    callback query
+    callback query if callback?
 
-form = (request, callback) ->
+form = (request, callback = ->) ->
   body = ""
   request.on "data", (chunk) ->
     body += chunk
@@ -21,21 +22,15 @@ form = (request, callback) ->
       for param of params
         pair = params[param].split("=")
         o[pair[0]] = unescape pair[1].replace /\+/g, " "
-      result = (item) ->
-        o[item]
-      for key, val of o
-        result[key] = val
-      callback result    
+      callback o if callback?
     else if request.headers["content-type"] is "application/json"
-      callback JSON.parse body
+      callback JSON.parse body if callback?
     else
-      puts "ERROR: unknown content type: #{request["content-type"]}"
-      callback "ERROR: unknown content type: #{request["content-type"]}"
+      callback "ERROR: unknown content type: #{request["content-type"]}" if callback?
 
 querystring= (request) ->
   urlObj = url.parse request.url, true
-  result = (item) ->
-    result[item]
+  result = {}
   for key, val of urlObj.query
     result[key] = val
   result

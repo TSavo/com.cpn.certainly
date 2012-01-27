@@ -1,5 +1,4 @@
 <?xml version="1.0"?>
-
 <project default="test" basedir=".">
 	<condition property="node.exec" value="tools/node/node.exe">
 	   <os family="windows"/>
@@ -13,11 +12,10 @@
 			<arg line="tools/coffee-script/bin/coffee -o target/ -c src/" />
 		</exec>
 	</target>
-	
 	<target name="test" depends="compile">
 		<apply executable="${node.exec}">
 			<fileset dir="target/test/">
-				<include name="**/*.js"></include>	
+				<include name="**/test*.js"></include>	
 			</fileset>
 		</apply>
 	</target>

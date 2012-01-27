@@ -1,6 +1,7 @@
 exec = require("child_process").exec
+spawn = require("child_process").spawn
 fs = require("fs")
-puts = require("util").puts
+puts = require("util").debug
 Semaphore = require("util/concurrent").Semaphore
 ThreadBarrier = require("util/concurrent").ThreadBarrier
 
@@ -38,6 +39,18 @@ buildSubj = (options) ->
     subject = "#{subject}/#{key}=#{value}"
   subject
   
+
+genConfig = (options, callback) ->
+  subjectAltName = options.subjectAltName
+  fs.readFile "config/openssl.cnf.template", (err, confTemplate) ->
+    return callback(err) if err?
+    confTemplate = confTemplate.toString().replace /%%SUBJECT_ALT_NAME%%/g, subjectAltName
+    confFile = "config/#{randFile()}"
+    fs.writeFile confFile, confTemplate, (err) ->
+      return callback(err) if err?
+      callback null, confFile
+
+
 ###*
  * Generates a Self signed X509 Certificate.
  *
@@ -47,18 +60,33 @@ buildSubj = (options) ->
  * @param {Function} callback fired with (err).
 ###
 genSelfSigned = (options, daysValidFor, callback) ->
-  keyFile = randFile()
-  certFile = randFile()
+  keyFile = "temp/#{randFile()}"
+  certFile = "temp/#{randFile()}"
+  subjectAltName = null
   if typeof options == "object"
-    options = buildSubj options
+    opCopy = {}
+    for k, v of options
+      opCopy[k] = v
+    if opCopy.subjectAltName?
+      subjectAltName = opCopy.subjectAltName
+      delete opCopy.subjectAltName 
+    options = buildSubj opCopy
   reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{options}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]    
+  if subjectAltName?
+    return genConfig {subjectAltName:subjectAltName}, (err, confFile) ->
+      return callback(err) if err?
+      reqArgs.push "-config #{confFile}"
+      return selfSign reqArgs, certFile, keyFile, confFile, callback
+  selfSign reqArgs, certFile, keyFile, null, callback
+
+selfSign = (reqArgs, certFile, keyFile, confFile, callback) ->
   cmd = "openssl req " + reqArgs.join(" ")
   exec cmd, (err, stdout, stderr) ->
+    fs.unlink confFile if confFile
     if err
       fs.unlink certFile
       fs.unlink keyFile
-      callback err
-      return
+      return callback err
     key=cert=""
     ThreadBarrier b = new ThreadBarrier 2, ->
       callback null, key, cert
@@ -78,7 +106,7 @@ genSelfSigned = (options, daysValidFor, callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 genKey = (callback) ->
-  keyFile = randFile()
+  keyFile = "temp/#{randFile()}"
   args = [ "-out #{keyFile}", 2048 ]
   cmd = "openssl genrsa " + args.join(" ")
   exec cmd, (err, stdout, stderr) ->
@@ -90,7 +118,9 @@ genKey = (callback) ->
       if err 
         return callback err
       callback null, key
-    
+
+
+
 ###*
  * Generate a CSR for the specified key, and pass it back as a string through
  * a callback.
@@ -100,22 +130,39 @@ genKey = (callback) ->
  * @param {Function} callback Callback fired with (err, csrText).
 ###
 genCSR = (key, options, callback) ->
-  keyFile = randFile()
-  CSRFile = randFile()
+  keyFile = "temp/#{randFile()}"
+  CSRFile = "temp/#{randFile()}"
+  subjectAltName = null
+  subject = options
   if typeof options == "object"
-    options = buildSubj options
-  args = [ "-batch", "-new", "-nodes", "-subj \"#{options}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
-  cmd = "openssl req " + args.join(" ")
+    opCopy = {}
+    for k, v of options
+      opCopy[k] = v
+    if opCopy.subjectAltName?
+      subjectAltName = opCopy.subjectAltName
+      delete opCopy.subjectAltName 
+    subject = buildSubj opCopy
+  args = [ "-batch", "-new", "-nodes", "-subj \"#{subject}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   fs.writeFile keyFile, key, (err) ->
-    return callback err if err
-    exec cmd, (err, stdout, stderr) ->
-      return callback "Error while executing: #{cmd}\n#{err}" if err
-      fs.unlink keyFile        
-      fs.readFile CSRFile, (err, csr) ->
-        return callback err if err
-        fs.unlink CSRFile
-        callback null, csr
-          
+    return callback err if err?
+    if subjectAltName?
+      return genConfig {subjectAltName:subjectAltName}, (err, confFile) ->
+        return callback(err) if err?
+        args.push "-config #{confFile}"
+        CSR args, keyFile, CSRFile, confFile, callback
+    CSR args, keyFile, CSRFile, null, callback
+    
+CSR = (args, keyFile, CSRFile, confFile, callback) ->      
+  cmd = "openssl req " + args.join(" ")
+  exec cmd, (err, stdout, stderr) ->
+    fs.unlink confFile if confFile?
+    return callback "Error while executing: #{cmd}\n#{err}" if err?
+    fs.unlink keyFile        
+    fs.readFile CSRFile, (err, csr) ->
+      return callback err if err?
+      fs.unlink CSRFile
+      callback null, csr
+        
 
        
 ###*
@@ -132,7 +179,7 @@ initSerialFile = (callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 verifyCSR = (csr, callback) ->
-  CSRFile = randFile()
+  CSRFile = "temp/#{randFile()}"
   args = [ "-verify", "-noout", "-in #{CSRFile}" ]
   cmd = "openssl req #{args.join(" ")}"
   fs.writeFile CSRFile, csr, ->
@@ -150,10 +197,10 @@ verifyCSR = (csr, callback) ->
  * @param {Function} callback Callback fired with (err).
 ###
 signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
-  csrPath = randFile()
-  certPath = randFile()
-  keyPath = randFile()
-  outputPath = randFile()
+  csrPath = "temp/#{randFile()}"
+  certPath = "temp/#{randFile()}"
+  keyPath = "temp/#{randFile()}"
+  outputPath = "temp/#{randFile()}"
   barrier = new ThreadBarrier 3, ->
     args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}" ]
     cmd = "openssl x509 #{args.join(" ")}"
@@ -161,12 +208,11 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
       fs.unlink keyPath
       fs.unlink csrPath
       fs.unlink certPath
-      if err
+      if err?
         return callback "Error while executing: #{cmd}\n#{err}"
       fs.readFile outputPath, (err, output) ->
         fs.unlink outputPath
-        if err
-          return callback err
+        return callback(err) if err?
         return callback null, output
 
   fs.writeFile csrPath, csr, (err) ->
@@ -182,7 +228,7 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
  * @param {Function} callback Callback fired with (err, fingerprint).
 ###
 getCertFingerprint = (cert, callback) ->
-  certPath = randFile()
+  certPath = "temp/#{randFile()}"
   fs.writeFile certPath, cert, (err) ->
     if(err)
       return callback err
@@ -191,18 +237,18 @@ getCertFingerprint = (cert, callback) ->
     exec cmd, (err, stdout, stderr) ->
       fs.unlink certPath
       if err
-        callback err, stdout, stderr
+        callback err, stdout, stderr if callback?
         return
       segments = stdout.split("=")
       if segments.length isnt 2 or segments[0] isnt "SHA1 Fingerprint"
         callback new Error("Unexpected output from openssl"), stdout, stderr
         return
-      callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '')
+      callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '') if callback?
 
 sign = (key, message, callback) ->
-  keyPath = randFile()
-  messagePath = randFile()
-  sigPath = randFile()
+  keyPath = "temp/#{randFile()}"
+  messagePath = "temp/#{randFile()}"
+  sigPath = "temp/#{randFile()}"
   barrier = new ThreadBarrier 2, ->
     args = ["-sign #{keyPath}", "-out #{sigPath}"]
     cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
@@ -221,9 +267,9 @@ sign = (key, message, callback) ->
     barrier.join()
             
 verify = (cert, sig, message, callback) ->
-  certPath = randFile()
-  messagePath = randFile()
-  sigPath = randFile()
+  certPath = "temp/#{randFile()}"
+  messagePath = "temp/#{randFile()}"
+  sigPath = "temp/#{randFile()}"
   barrier = new ThreadBarrier 3, ->
     args = ["-prverify #{certPath}", "-signature #{sigPath}"]
     cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
@@ -240,6 +286,61 @@ verify = (cert, sig, message, callback) ->
   fs.writeFile sigPath, sig, (err) ->
     barrier.join()
     
+bundle = (certNames, callback) ->
+  certs = new Array()  
+  barrier = new ThreadBarrier certNames.length, ->
+    bundle = ""
+    for x in certs
+      bundle += x
+    callback null, bundle
+  error = false
+  for cert in [0..certNames.length-1]
+    do (cert) ->
+      fs.readFile "certs/#{certNames[cert]}.cert", (err, data) ->
+        if err?
+          return if error
+          error = true
+          return callback err
+        certs[cert] = data.toString()
+        barrier.join()
+
+pcs12 = (inCert, callback) ->
+  certFile = "temp/#{randFile()}"
+  pkcsFile = "temp/#{randFile()}"
+  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"" ]
+  cmd = "openssl pkcs12 #{args.join(" ")}"
+  fs.writeFile certFile, inCert, (err) ->
+    return callback(err) if err?
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink certFile
+      return callback(err) if err?
+      fs.readFile pkcsFile, (err, pkcs) ->
+        return callback(err) if err?
+        fs.unlink pkcsFile
+        callback null, pkcs  
+  
+pkcs12 = (inKey, inCert, callback) ->
+  keyFile = "temp/#{randFile()}"
+  certFile = "temp/#{randFile()}"
+  pkcsFile = "temp/#{randFile()}"
+  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"" ]
+  cmd = "openssl pkcs12 #{args.join(" ")}"
+  barrier = new ThreadBarrier 2, ->
+    exec cmd, (err, stdout, stderr) ->
+      fs.unlink keyFile
+      fs.unlink certFile
+      return callback(err) if err?
+      fs.readFile pkcsFile, (err, pkcs) ->
+        return callback(err) if err?
+        fs.unlink pkcsFile
+        callback null, pkcs  
+  fs.writeFile keyFile, inKey, (err) ->
+    return callback(err) if err?
+    barrier.join()
+  fs.writeFile certFile, inCert, (err) ->
+    return callback(err) if err?
+    barrier.join() 
+
 exports.genSelfSigned = genSelfSigned
 exports.genKey = genKey
 exports.genCSR = genCSR
@@ -249,3 +350,6 @@ exports.signCSR = signCSR
 exports.getCertFingerprint = getCertFingerprint
 exports.sign = sign
 exports.verify = verify
+exports.bundle = bundle
+exports.pkcs12 = pkcs12
+exports.pcs12 = pcs12

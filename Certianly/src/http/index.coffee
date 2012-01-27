@@ -1,29 +1,22 @@
 Application = require("http/application").Application
 view = require("http/mustache").view
 cert_dispatcher = require("security/cert_dispatcher")
+puts = require("util").debug
 
 app = new Application
-app.addPage("/cert",
-  GET:view("newCertForm"),
-  POST:cert_dispatcher.newCert
-).addPage("/cert/install",
-  GET:view("installCertForm"),
-  POST:cert_dispatcher.installCert
-).addPage("/cert/csr",
-  GET:view("newSignerForm"),
+app.addPage("/cert/csr",
   POST:cert_dispatcher.newCSR
-).addPage("/cert/signer",
-  POST:cert_dispatcher.newSigner
+).addPage("/cert",
+  POST:cert_dispatcher.genKey
 ).addPage("/cert/sign",
   POST:cert_dispatcher.signCSR
-).addPage("/cert/root",
-  GET:view("newRootForm"),
+).addPage("/cert/ca",
   POST:cert_dispatcher.genCA
-).addPage("/cert/bundle",
-  GET:view("bundleCertsForm"),
-  POST:cert_dispatcher.bundleCerts
+).addPage("/cert/pkcs12",
+  POST:cert_dispatcher.pkcs12
 ).addPage("/dieAHorribleDeath",
-  GET:(response, request)->
+  GET:(request, response)->
+    puts "Server is shutting down."
     response.write "What a world... what a world..."
     response.end()
     app.stop()
