@@ -56,14 +56,13 @@ genKey = (request, response, formValues) ->
 newCSR = (request, response, formValues) ->
   if error = notPresent formValues, ["subject", "privateKey"]
     return reportError response, "You must supply a #{error}"
-  certgen.initSerialFile ->
-    certgen.genCSR formValues.privateKey, formValues.subject, (err, csr) ->
-      return reportError response, err if err?
-      result = 
-        signee:
-          formValues            
-        csr:csr.toString()
-      jsonResponse response, result
+  certgen.genCSR formValues.privateKey, formValues.subject, (err, csr) ->
+    return reportError response, err if err?
+    result = 
+      signee:
+        formValues            
+      csr:csr.toString()
+    jsonResponse response, result
 
 signCSR = (request, response, formValues) ->
   caCert=caKey=""
