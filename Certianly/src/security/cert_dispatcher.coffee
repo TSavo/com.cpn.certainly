@@ -40,11 +40,13 @@ genCA = (request, response, formValues) ->
   error = null
   if error = notPresent formValues, ["subject", "daysValidFor"]
     return reportError response, "You must supply a #{error}"
-  certgen.genSelfSigned formValues.subject, formValues.daysValidFor, (err, key, cert)->
+  subject = formValues.subject
+  certgen.genSelfSigned subject, formValues.daysValidFor, (err, key, cert)->
     return reportError response, err if err?
     formValues.privateKey = key.toString()
     formValues.cert = cert.toString()
     formValues.selfSigned = true
+    delete subject.id
     jsonResponse response, formValues
 
 genKey = (request, response, formValues) ->
@@ -54,7 +56,7 @@ genKey = (request, response, formValues) ->
     jsonResponse response, formValues
 
 newCSR = (request, response, formValues) ->
-  if error = notPresent formValues, ["subject", "privateKey"]
+  if error = notPresent formValues, ["subject","privateKey"]
     return reportError response, "You must supply a #{error}"
   certgen.genCSR formValues.privateKey, formValues.subject, (err, csr) ->
     return reportError response, err if err?

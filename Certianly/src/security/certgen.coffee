@@ -2,6 +2,7 @@ exec = require("child_process").exec
 spawn = require("child_process").spawn
 fs = require("fs")
 puts = require("util").debug
+inspect = require("util").inspect
 Semaphore = require("util/concurrent").Semaphore
 ThreadBarrier = require("util/concurrent").ThreadBarrier
 
@@ -36,21 +37,46 @@ randFile = ->
 buildSubj = (options) ->
   subject = ""
   for key, value of options
-    subject = "#{subject}/#{key}=#{value}"
+    if(key.length < 3)
+      key = key.toUpperCase()
+    if key in ["O", "OU", "L", "C", "ST", "CN", "emailAddress", "commonName", "state", "organization", "organizationalUnit", "country", "locality"]
+      subject = "#{subject}/#{key}=#{value}"
   subject
   
 
 genConfig = (options, callback) ->
-  subjectAltName = options.subjectAltName
   fs.readFile "config/openssl.cnf.template", (err, confTemplate) ->
     return callback(err) if err?
-    confTemplate = confTemplate.toString().replace /%%SUBJECT_ALT_NAME%%/g, subjectAltName
+    confTemplate = confTemplate.toString().replace /%%SUBJECT_ALT_NAME%%/g, (if options.subjectAltName? then options.subjectAltName else "")
+    confTemplate = confTemplate.toString().replace /%%NSCOMMENT%%/g, (if options.nsComment? then options.nsComment else "")
     confFile = "config/#{randFile()}"
     fs.writeFile confFile, confTemplate, (err) ->
       return callback(err) if err?
       callback null, confFile
 
-
+genExtensions = (options, callback) ->
+  puts options
+  confTemplate = "basicConstraints=CA:FALSE\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment\n"
+  for k, v of options
+    if(k in ["subjectAltName", "nsComment"])
+      confTemplate += "#{k}=#{v}\n"
+  confFile = "config/#{randFile()}"
+  fs.writeFile confFile, confTemplate, (err) ->
+    return callback(err) if err?
+    callback null, confFile
+    
+findExtensions = (csr, callback) ->
+  verifyCSR csr, (err, text) ->
+    return callback(err) if err?
+    text = text.toString()
+    text = text.split("\n")
+    result = {}
+    for item, i in text
+      if text[i].indexOf("X509v3 Subject Alternative Name:") > -1
+        result.subjectAltName = text[i+1].trim()
+      if text[i].indexOf("Netscape Comment:") > -1
+        result.nsComment = text[i+1].trim()
+    callback null, result
 ###*
  * Generates a Self signed X509 Certificate.
  *
@@ -63,26 +89,20 @@ genSelfSigned = (options, daysValidFor, callback) ->
   keyFile = "temp/#{randFile()}"
   certFile = "temp/#{randFile()}"
   subjectAltName = null
+  optionString = options
   if typeof options == "object"
-    opCopy = {}
-    for k, v of options
-      opCopy[k] = v
-    if opCopy.subjectAltName?
-      subjectAltName = opCopy.subjectAltName
-      delete opCopy.subjectAltName 
-    options = buildSubj opCopy
-  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{options}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]    
-  if subjectAltName?
-    return genConfig {subjectAltName:subjectAltName}, (err, confFile) ->
-      return callback(err) if err?
-      reqArgs.push "-config #{confFile}"
-      return selfSign reqArgs, certFile, keyFile, confFile, callback
-  selfSign reqArgs, certFile, keyFile, null, callback
+    optionString = buildSubj options
+  reqArgs = [ "-batch", "-x509", "-nodes", "-days #{daysValidFor}", "-subj \"#{optionString}\"", "-sha1", "-newkey rsa:2048", "-keyout #{keyFile}", "-out #{certFile}" ]    
+  return genConfig options, (err, confFile) ->
+    return callback(err) if err?
+    reqArgs.push "-config #{confFile}"
+    return selfSign reqArgs, certFile, keyFile, confFile, callback
+
 
 selfSign = (reqArgs, certFile, keyFile, confFile, callback) ->
   cmd = "openssl req " + reqArgs.join(" ")
   exec cmd, (err, stdout, stderr) ->
-    fs.unlink confFile if confFile
+    fs.unlink confFile if confFile?
     if err
       fs.unlink certFile
       fs.unlink keyFile
@@ -135,22 +155,14 @@ genCSR = (key, options, callback) ->
   subjectAltName = null
   subject = options
   if typeof options == "object"
-    opCopy = {}
-    for k, v of options
-      opCopy[k] = v
-    if opCopy.subjectAltName?
-      subjectAltName = opCopy.subjectAltName
-      delete opCopy.subjectAltName 
-    subject = buildSubj opCopy
+    subject = buildSubj options
   args = [ "-batch", "-new", "-nodes", "-subj \"#{subject}\"", "-key #{keyFile}", "-out #{CSRFile}" ]
   fs.writeFile keyFile, key, (err) ->
     return callback err if err?
-    if subjectAltName?
-      return genConfig {subjectAltName:subjectAltName}, (err, confFile) ->
-        return callback(err) if err?
-        args.push "-config #{confFile}"
-        CSR args, keyFile, CSRFile, confFile, callback
-    CSR args, keyFile, CSRFile, null, callback
+    return genConfig options, (err, confFile) ->
+      return callback(err) if err?
+      args.push "-config #{confFile}"
+      CSR args, keyFile, CSRFile, confFile, callback
     
 CSR = (args, keyFile, CSRFile, confFile, callback) ->      
   cmd = "openssl req " + args.join(" ")
@@ -180,13 +192,12 @@ initSerialFile = (callback) ->
 ###
 verifyCSR = (csr, callback) ->
   CSRFile = "temp/#{randFile()}"
-  args = [ "-verify", "-noout", "-in #{CSRFile}" ]
+  args = [ "-verify", "-noout", "-in #{CSRFile} -text" ]
   cmd = "openssl req #{args.join(" ")}"
   fs.writeFile CSRFile, csr, ->
     exec cmd, (err, stdout, stderr) ->
       fs.unlink CSRFile
       callback err, stdout, stderr 
-
 ###*
  * Sign a CSR and store the resulting certificate to the specified location
  * @param {String} csrPath Path to the CSR file.
@@ -202,18 +213,23 @@ signCSR = (csr, caCert, caKey, daysValidFor, callback) ->
   keyPath = "temp/#{randFile()}"
   outputPath = "temp/#{randFile()}"
   barrier = new ThreadBarrier 3, ->
-    args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}" ]
-    cmd = "openssl x509 #{args.join(" ")}"
-    exec cmd, (err, stdout, stderr) ->
-      fs.unlink keyPath
-      fs.unlink csrPath
-      fs.unlink certPath
-      if err?
-        return callback "Error while executing: #{cmd}\n#{err}"
-      fs.readFile outputPath, (err, output) ->
-        fs.unlink outputPath
-        return callback(err) if err?
-        return callback null, output
+    findExtensions csr, (err, extensions) ->
+      puts inspect extensions
+      genExtensions extensions, (err, extensionFile) ->
+        args = [ "-req", "-days #{daysValidFor}", "-CA \"#{certPath}\"", "-CAkey \"#{keyPath}\"", "-CAserial \"#{srlFile}\"", "-in #{csrPath}", "-out #{outputPath}", "-extfile #{extensionFile}" ]
+        
+        cmd = "openssl x509 #{args.join(" ")}"
+        exec cmd, (err, stdout, stderr) ->
+          fs.unlink keyPath
+          fs.unlink csrPath
+          fs.unlink certPath
+          fs.unlink extensionFile
+          if err?
+            return callback "Error while executing: #{cmd}\n#{err}"
+          fs.readFile outputPath, (err, output) ->
+            fs.unlink outputPath
+            return callback(err) if err?
+            return callback null, output
 
   fs.writeFile csrPath, csr, (err) ->
     barrier.join()
