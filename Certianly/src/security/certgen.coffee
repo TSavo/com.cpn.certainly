@@ -56,7 +56,7 @@ genConfig = (options, callback) ->
 
 genExtensions = (options, callback) ->
   puts options
-  confTemplate = "basicConstraints=CA:FALSE\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment\n"
+  confTemplate = "basicConstraints=CA:FALSE\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign\n"
   for k, v of options
     if(k in ["subjectAltName", "nsComment"])
       confTemplate += "#{k}=#{v}\n"
