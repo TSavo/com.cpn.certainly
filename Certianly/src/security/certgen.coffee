@@ -56,7 +56,16 @@ genConfig = (options, callback) ->
 
 genExtensions = (options, callback) ->
   puts options
-  confTemplate = "basicConstraints=CA:TRUE\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign\n"
+  confTemplate = "basicConstraints=critical,CA:#{options.CA}"
+  if options.CA and options.pathlen? and options.pathlen > -1
+    confTemplate += ",pathlen=#{pathlen}"
+  confTemplate += "\n"
+  confTemplate += "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement"
+  if options.CA
+    confTemplate += ", keyCertSign, cRLSign"
+  confTemplate += "\n"
+  if not options.CA
+    confTemplate += "extendedKeyUsage=critical,serverAuth,clientAuth,codeSigning,emailProtection,timeStamping\n"
   for k, v of options
     if(k in ["subjectAltName", "nsComment"])
       confTemplate += "#{k}=#{v}\n"
@@ -76,6 +85,10 @@ findExtensions = (csr, callback) ->
         result.subjectAltName = text[i+1].trim()
       if text[i].indexOf("Netscape Comment:") > -1
         result.nsComment = text[i+1].trim()
+      if text[i].indexOf("X509v3 Basic Constraints:")
+        result.CA = text[i+1].trim().toUpperCase().indexOf("CA:TRUE") > -1
+        text[i+1].trim().match(/.*pathlen:(d+)/)
+        result.pathlen = RegExp.$1 if text[i+1].trim().indexOf("pathlen:") > -1
     callback null, result
 ###*
  * Generates a Self signed X509 Certificate.
