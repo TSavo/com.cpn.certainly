@@ -163,7 +163,7 @@ unstructuredName           = An optional company name
 # This goes against PKIX guidelines but some CAs do it and some software
 # requires this to avoid interpreting an end user certificate as a CA.
 
-basicConstraints=CA:FALSE
+basicConstraints=%%BASIC_CONSTRAINTS%%
 nsComment=%%NSCOMMENT%%
 # Here are some examples of the usage of nsCertType. If it is omitted
 # the certificate can be used for anything *except* object signing.
@@ -210,7 +210,7 @@ subjectAltName=%%SUBJECT_ALT_NAME%%
 
 # Extensions to add to a certificate request
 subjectAltName=%%SUBJECT_ALT_NAME%%
-basicConstraints = CA:FALSE
+basicConstraints = %%BASIC_CONSTRAINTS%%
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 nsComment=%%NSCOMMENT%%
 
@@ -231,7 +231,7 @@ authorityKeyIdentifier=keyid:always,issuer:always
 # extensions.
 #basicConstraints = critical,CA:true
 # So we do this instead.
-basicConstraints = CA:true
+basicConstraints = %%BASIC_CONSTRAINTS%%
 
 # Key usage: this is typical for a CA certificate. However since it will
 # prevent it being used as an test self-signed certificate it is best
@@ -266,7 +266,7 @@ authorityKeyIdentifier=keyid:always,issuer:always
 # This goes against PKIX guidelines but some CAs do it and some software
 # requires this to avoid interpreting an end user certificate as a CA.
 
-basicConstraints=CA:FALSE
+basicConstraints=%%BASIC_CONSTRAINTS%%
 
 # Here are some examples of the usage of nsCertType. If it is omitted
 # the certificate can be used for anything *except* object signing.

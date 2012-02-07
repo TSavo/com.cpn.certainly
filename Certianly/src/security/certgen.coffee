@@ -49,16 +49,18 @@ genConfig = (options, callback) ->
     return callback(err) if err?
     confTemplate = confTemplate.toString().replace /%%SUBJECT_ALT_NAME%%/g, (if options.subjectAltName? then options.subjectAltName else "")
     confTemplate = confTemplate.toString().replace /%%NSCOMMENT%%/g, (if options.nsComment? then options.nsComment else "")
+    confTemplate = confTemplate.toString().replace /%%BASIC_CONSTRAINTS%%/g, (if options.CA? and options.CA then "CA:TRUE" else "CA:FALSE")
+    confTemplate = confTemplate.toString().replace /CA:TRUE/g, (if options.pathlen? and options.pathlen > -1 then "CA:TRUE,pathlen:#{options.pathlen}" else "CA:TRUE")
     confFile = "config/#{randFile()}"
     fs.writeFile confFile, confTemplate, (err) ->
       return callback(err) if err?
       callback null, confFile
 
 genExtensions = (options, callback) ->
-  puts options
+  puts inspect options
   confTemplate = "basicConstraints=critical,CA:#{options.CA}"
   if options.CA and options.pathlen? and options.pathlen > -1
-    confTemplate += ",pathlen=#{pathlen}"
+    confTemplate += ",pathlen:#{options.pathlen}"
   confTemplate += "\n"
   confTemplate += "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement"
   if options.CA
@@ -85,10 +87,11 @@ findExtensions = (csr, callback) ->
         result.subjectAltName = text[i+1].trim()
       if text[i].indexOf("Netscape Comment:") > -1
         result.nsComment = text[i+1].trim()
-      if text[i].indexOf("X509v3 Basic Constraints:")
+      if text[i].indexOf("X509v3 Basic Constraints:") > -1
+        puts text[i+1]
         result.CA = text[i+1].trim().toUpperCase().indexOf("CA:TRUE") > -1
-        text[i+1].trim().match(/.*pathlen:(d+)/)
-        result.pathlen = RegExp.$1 if text[i+1].trim().indexOf("pathlen:") > -1
+        match = text[i+1].trim().match(/.*pathlen:(\d+)/)
+        result.pathlen = match[1] if match? and match.length > 1
     callback null, result
 ###*
  * Generates a Self signed X509 Certificate.
@@ -180,7 +183,7 @@ genCSR = (key, options, callback) ->
 CSR = (args, keyFile, CSRFile, confFile, callback) ->      
   cmd = "openssl req " + args.join(" ")
   exec cmd, (err, stdout, stderr) ->
-    fs.unlink confFile if confFile?
+    ###fs.unlink confFile if confFile?###
     return callback "Error while executing: #{cmd}\n#{err}" if err?
     fs.unlink keyFile        
     fs.readFile CSRFile, (err, csr) ->
