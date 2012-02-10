@@ -62,12 +62,9 @@ genExtensions = (options, callback) ->
   if options.CA and options.pathlen? and options.pathlen > -1
     confTemplate += ",pathlen:#{options.pathlen}"
   confTemplate += "\n"
-  confTemplate += "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement"
-  if options.CA
-    confTemplate += ", keyCertSign, cRLSign"
+  confTemplate += "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nkeyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign"
   confTemplate += "\n"
-  if not options.CA
-    confTemplate += "extendedKeyUsage=critical,serverAuth,clientAuth,codeSigning,emailProtection,timeStamping\n"
+  confTemplate += "extendedKeyUsage=critical,serverAuth,clientAuth,codeSigning,emailProtection,timeStamping\n"
   for k, v of options
     if(k in ["subjectAltName", "nsComment"])
       confTemplate += "#{k}=#{v}\n"
