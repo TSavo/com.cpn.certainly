@@ -51,7 +51,7 @@ genConfig = (options, callback) ->
     confTemplate = confTemplate.toString().replace /%%NSCOMMENT%%/g, (if options.nsComment? then options.nsComment else "")
     confTemplate = confTemplate.toString().replace /%%BASIC_CONSTRAINTS%%/g, (if options.CA? and options.CA then "CA:TRUE" else "CA:FALSE")
     confTemplate = confTemplate.toString().replace /CA:TRUE/g, (if options.pathlen? and options.pathlen > -1 then "CA:TRUE,pathlen:#{options.pathlen}" else "CA:TRUE")
-    confFile = "config/#{randFile()}"
+    confFile = "temp/#{randFile()}"
     fs.writeFile confFile, confTemplate, (err) ->
       return callback(err) if err?
       callback null, confFile
@@ -333,31 +333,40 @@ bundle = (certNames, callback) ->
         certs[cert] = data.toString()
         barrier.join()
 
-pcs12 = (inCert, callback) ->
+pcs12 = (inCert, ca, callback) ->
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
-  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"" ]
+  caFile = "temp/#{randFile()}"
+  
+  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
-  fs.writeFile certFile, inCert, (err) ->
-    return callback(err) if err?
+  barrier = new ThreadBarrier 2, ->
     exec cmd, (err, stdout, stderr) ->
       fs.unlink certFile
+      fs.unlink caFile
       return callback(err) if err?
       fs.readFile pkcsFile, (err, pkcs) ->
         return callback(err) if err?
         fs.unlink pkcsFile
         callback null, pkcs  
-  
-pkcs12 = (inKey, inCert, callback) ->
+  fs.writeFile certFile, inCert, (err) ->
+    return callback(err) if err?
+    barrier.join()
+  fs.writeFile caFile, ca, (err) ->
+    return callback(err) if err?
+    barrier.join()
+pkcs12 = (inKey, inCert, ca, callback) ->
   keyFile = "temp/#{randFile()}"
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
-  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"" ]
+  caFile = "temp/#{randFile()}"
+  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-chain" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
-  barrier = new ThreadBarrier 2, ->
+  barrier = new ThreadBarrier 3, ->
     exec cmd, (err, stdout, stderr) ->
       fs.unlink keyFile
       fs.unlink certFile
+      fs.unlink caFile
       return callback(err) if err?
       fs.readFile pkcsFile, (err, pkcs) ->
         return callback(err) if err?
@@ -369,6 +378,9 @@ pkcs12 = (inKey, inCert, callback) ->
   fs.writeFile certFile, inCert, (err) ->
     return callback(err) if err?
     barrier.join() 
+  fs.writeFile caFile, ca, (err) ->
+    return callback(err) if err?
+    barrier.join()
 
 exports.genSelfSigned = genSelfSigned
 exports.genKey = genKey

@@ -32,7 +32,6 @@ notPresent = (formValues, required) ->
   return false
 
 jsonResponse = (response, entity) ->
-  puts JSON.stringify entity, null, "  "
   response.writeHead 200, { 'content-type': 'application/json' }
   response.write JSON.stringify entity
   response.end()
@@ -76,19 +75,30 @@ signCSR = (request, response, formValues) ->
     formValues.signee.signer = formValues.signer
     jsonResponse response, formValues.signee
     
+genCABundle = (certificate) ->
+  ca = certificate.cert;
+  if certificate.signer
+    ca += genCABundle certificate.signer
+  ca
+    
 pkcs12 = (request, response, formValues) ->
   unless formValues.cert?
     return reportError response, "You must supply a certificate."
+  puts "going into genCABundle with #{inspect formValues}"
+  ca = genCABundle formValues.signer
+  puts ca
   if formValues.privateKey?
-    certgen.pkcs12 formValues.privateKey, formValues.cert, (err, pkcs)->
+    certgen.pkcs12 formValues.privateKey, formValues.cert, ca, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues    
   else
-    certgen.pcs12 formValues.cert, (err, pkcs)->
+    certgen.pcs12 formValues.cert, ca, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
-      jsonResponse response, formValues    
+      jsonResponse response, formValues   
+      
+       
 exports.genCA = genCA
 exports.genKey = genKey
 exports.newCSR = newCSR

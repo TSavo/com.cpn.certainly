@@ -50,8 +50,7 @@ crl        = $dir/crl.pem       # The current CRL
 private_key     = $dir/private/cakey.pem# The private key
 RANDFILE   = $dir/private/.rand # private random number file
 
-x509_extensions = usr_cert      # The extentions to add to the cert
-
+x509_extensions = v3_ca      # The extentions to add to the cert
 # Comment out the following two lines for the "traditional"
 # (and highly broken) format.
 name_opt   = ca_default         # Subject Name options
@@ -232,20 +231,21 @@ authorityKeyIdentifier=keyid:always,issuer:always
 #basicConstraints = critical,CA:true
 # So we do this instead.
 basicConstraints = %%BASIC_CONSTRAINTS%%
+subjectAltName=%%SUBJECT_ALT_NAME%%
+nsComment=%%NSCOMMENT%%
 
 # Key usage: this is typical for a CA certificate. However since it will
 # prevent it being used as an test self-signed certificate it is best
 # left out by default.
-# keyUsage = cRLSign, keyCertSign
+#keyUsage = cRLSign, keyCertSign
 
 # Some might want this also
-# nsCertType = sslCA, emailCA
+#nsCertType = sslCA, emailCA
 
 # Include email address in subject alt name: another PKIX recommendation
 # subjectAltName=email:copy
 # Copy issuer details
 # issuerAltName=issuer:copy
-subjectAltName=%%SUBJECT_ALT_NAME%%
 # DER hex encoding of an extension: beware experts only!
 # obj=DER:02:03
 # Where 'obj' is a standard or added object
