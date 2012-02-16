@@ -339,7 +339,7 @@ pcs12 = (inCert, ca, callback) ->
   pkcsFile = "temp/#{randFile()}"
   caFile = "temp/#{randFile()}"
   
-  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"" ]
+  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-nodes" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
   barrier = new ThreadBarrier 2, ->
     exec cmd, (err, stdout, stderr) ->
@@ -361,7 +361,7 @@ pkcs12 = (inKey, inCert, ca, callback) ->
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
   caFile = "temp/#{randFile()}"
-  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-chain" ]
+  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-chain", "-nodes" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
   barrier = new ThreadBarrier 3, ->
     exec cmd, (err, stdout, stderr) ->
