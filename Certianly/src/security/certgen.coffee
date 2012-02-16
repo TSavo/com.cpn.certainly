@@ -68,7 +68,7 @@ genExtensions = (options, callback) ->
   for k, v of options
     if(k in ["subjectAltName", "nsComment"])
       confTemplate += "#{k}=#{v}\n"
-  confFile = "config/#{randFile()}"
+  confFile = "temp/#{randFile()}"
   fs.writeFile confFile, confTemplate, (err) ->
     return callback(err) if err?
     callback null, confFile
@@ -115,7 +115,7 @@ genSelfSigned = (options, daysValidFor, callback) ->
 selfSign = (reqArgs, certFile, keyFile, confFile, callback) ->
   cmd = "openssl req " + reqArgs.join(" ")
   exec cmd, (err, stdout, stderr) ->
-    fs.unlink confFile if confFile?
+    fs.unlink confFile
     if err
       fs.unlink certFile
       fs.unlink keyFile
@@ -182,7 +182,8 @@ CSR = (args, keyFile, CSRFile, confFile, callback) ->
   exec cmd, (err, stdout, stderr) ->
     ###fs.unlink confFile if confFile?###
     return callback "Error while executing: #{cmd}\n#{err}" if err?
-    fs.unlink keyFile        
+    fs.unlink keyFile   
+    fs.unlink confFile     
     fs.readFile CSRFile, (err, csr) ->
       return callback err if err?
       fs.unlink CSRFile
