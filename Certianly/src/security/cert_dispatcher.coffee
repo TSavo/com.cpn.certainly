@@ -88,12 +88,12 @@ pkcs12 = (request, response, formValues) ->
   ca = genCABundle formValues.signer
   puts ca
   if formValues.privateKey?
-    certgen.pkcs12 formValues.privateKey, formValues.cert, ca, (err, pkcs)->
+    certgen.pkcs12 formValues.privateKey, formValues.cert, ca, formValues.subject.CN, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues    
   else
-    certgen.pcs12 formValues.cert, ca, (err, pkcs)->
+    certgen.pcs12 formValues.cert, ca, formValues.subject.CN, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues   

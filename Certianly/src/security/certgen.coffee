@@ -334,12 +334,12 @@ bundle = (certNames, callback) ->
         certs[cert] = data.toString()
         barrier.join()
 
-pcs12 = (inCert, ca, callback) ->
+pcs12 = (inCert, ca, name, callback) ->
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
   caFile = "temp/#{randFile()}"
   
-  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:password", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-nodes" ]
+  args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:password", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-nodes", "-name \"#{name}\"" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
   barrier = new ThreadBarrier 2, ->
     exec cmd, (err, stdout, stderr) ->
@@ -356,12 +356,12 @@ pcs12 = (inCert, ca, callback) ->
   fs.writeFile caFile, ca, (err) ->
     return callback(err) if err?
     barrier.join()
-pkcs12 = (inKey, inCert, ca, callback) ->
+pkcs12 = (inKey, inCert, ca, name, callback) ->
   keyFile = "temp/#{randFile()}"
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
   caFile = "temp/#{randFile()}"
-  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:password", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-chain", "-nodes" ]
+  args = [ "-export", "-inkey \"#{keyFile}\"", "-in \"#{certFile}\"", "-passout pass:password", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-chain", "-nodes", "-name \"#{name}\""]
   cmd = "openssl pkcs12 #{args.join(" ")}"
   barrier = new ThreadBarrier 3, ->
     exec cmd, (err, stdout, stderr) ->
