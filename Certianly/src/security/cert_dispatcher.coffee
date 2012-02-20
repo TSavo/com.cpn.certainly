@@ -90,13 +90,13 @@ pkcs12 = (request, response, formValues) ->
   if certificate.privateKey?
     certgen.pkcs12 certificate.privateKey, certificate.cert, ca, certificate.subject.CN, (err, pkcs)->
       return reportError response, err if err?
-      formValues.pkcs12 = pkcs.toString("base64")
-      jsonResponse response, formValues    
+      formValues.certificate.pkcs12 = pkcs.toString("base64")
+      jsonResponse response, formValues.certificate    
   else
     certgen.pcs12 certificate.cert, ca, certificate.subject.CN, (err, pkcs)->
       return reportError response, err if err?
-      formValues.pkcs12 = pkcs.toString("base64")
-      jsonResponse response, formValues   
+      formValues.certificate.pkcs12 = pkcs.toString("base64")
+      jsonResponse response, formValues.certificate
       
        
 exports.genCA = genCA
