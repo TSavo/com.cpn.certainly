@@ -82,18 +82,18 @@ genCABundle = (certificate) ->
   ca
     
 pkcs12 = (request, response, formValues) ->
-  unless formValues.cert?
-    return reportError response, "You must supply a certificate."
-  puts "going into genCABundle with #{inspect formValues}"
-  ca = genCABundle formValues.signer
+  unless formValues.certificate? and formValues.caBundle?
+    return reportError response, "You must supply a certificate and caBundle."
+  ca = formValues.caBundle
+  certificate = formValues.certificate;
   puts ca
-  if formValues.privateKey?
-    certgen.pkcs12 formValues.privateKey, formValues.cert, ca, formValues.subject.CN, (err, pkcs)->
+  if certificate.privateKey?
+    certgen.pkcs12 certificate.privateKey, certificate.cert, ca, certificate.subject.CN, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues    
   else
-    certgen.pcs12 formValues.cert, ca, formValues.subject.CN, (err, pkcs)->
+    certgen.pcs12 certificate.cert, ca, certificate.subject.CN, (err, pkcs)->
       return reportError response, err if err?
       formValues.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues   
