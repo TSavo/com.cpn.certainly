@@ -338,7 +338,6 @@ pcs12 = (inCert, ca, name, callback) ->
   certFile = "temp/#{randFile()}"
   pkcsFile = "temp/#{randFile()}"
   caFile = "temp/#{randFile()}"
-  
   args = [ "-export", "-nokeys", "-in \"#{certFile}\"", "-passout pass:", "-out \"#{pkcsFile}\"", "-CAfile \"#{caFile}\"", "-certfile \"#{caFile}\"", "-nodes", "-name \"#{name}\"" ]
   cmd = "openssl pkcs12 #{args.join(" ")}"
   barrier = new ThreadBarrier 2, ->
