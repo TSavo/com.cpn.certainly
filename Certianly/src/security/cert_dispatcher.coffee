@@ -103,6 +103,7 @@ sign = (request, response, formValues) ->
   if error = notPresent formValues, ["cert", "privateKey", "ca", "message"]
     return reporterror response, "You must supply a #{error}"
   certgen.sign formValues.cert, formValues.privateKey, formValues.ca, new Buffer(formValues.message, "base64"), (error, results) ->
+    puts results.toString("base64")
     jsonResponse response, {result:results.toString("base64")}
   
 
