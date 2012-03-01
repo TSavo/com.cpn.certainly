@@ -285,14 +285,14 @@ sign = (cert, key, ca, message, callback) ->
     args = ["-inkey #{keyPath}", "-out #{sigPath}", "-signer #{certPath}", "-certfile #{caPath}", "-nodetach", "-outform der", "-in #{messagePath}"]
     cmd = "openssl smime #{args.join(" ")}"
     exec cmd, (err, stdout, stderr) ->
-      fs.unlink keyPath
+      ###fs.unlink keyPath
       fs.unlink messagePath
       fs.unlink caPath
-      fs.unlink certPath
+      fs.unlink certPath###
       if(err)
         return callback err, stdout, stderr
       fs.readFile sigPath, (err, sig) ->
-        fs.unlink sigPath
+        ###fs.unlink sigPath###
         callback err, sig  
   fs.writeFile keyPath, key, (err) ->
     barrier.join()
