@@ -8,12 +8,14 @@ app.addPage("/cert/csr",
   POST:cert_dispatcher.newCSR
 ).addPage("/cert",
   POST:cert_dispatcher.genKey
-).addPage("/cert/sign",
+).addPage("/cert/signCSR",
   POST:cert_dispatcher.signCSR
 ).addPage("/cert/ca",
   POST:cert_dispatcher.genCA
 ).addPage("/cert/pkcs12",
   POST:cert_dispatcher.pkcs12
+).addPage("/cert/sign",
+  POST:cert_dispatcher.sign
 ).addPage("/dieAHorribleDeath",
   GET:(request, response)->
     puts "Server is shutting down."

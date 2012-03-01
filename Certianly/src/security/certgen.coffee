@@ -275,26 +275,34 @@ getCertFingerprint = (cert, callback) ->
         return
       callback null, (segments[1] || '').replace(/^\s+|\s+$/g, '') if callback?
 
-sign = (key, message, callback) ->
+sign = (cert, key, ca, message, callback) ->
   keyPath = "temp/#{randFile()}"
   messagePath = "temp/#{randFile()}"
+  caPath = "temp/#{randFile()}"
+  certPath = "temp/#{randFile()}"
   sigPath = "temp/#{randFile()}"
-  barrier = new ThreadBarrier 2, ->
-    args = ["-sign #{keyPath}", "-out #{sigPath}"]
-    cmd = "openssl dgst -sha1 #{args.join(" ")} #{messagePath}"
+  barrier = new ThreadBarrier 4, ->
+    args = ["-inkey #{keyPath}", "-out #{sigPath}", "-signer #{certPath}", "-certfile #{caPath}", "-nodetach", "-outform der", "-in #{messagePath}"]
+    cmd = "openssl smime #{args.join(" ")}"
     exec cmd, (err, stdout, stderr) ->
       fs.unlink keyPath
       fs.unlink messagePath
+      fs.unlink caPath
+      fs.unlink certPath
       if(err)
         return callback err, stdout, stderr
       fs.readFile sigPath, (err, sig) ->
         fs.unlink sigPath
-        callback err, sig
-      
+        callback err, sig  
   fs.writeFile keyPath, key, (err) ->
     barrier.join()
   fs.writeFile messagePath, message, (err) ->
     barrier.join()
+  fs.writeFile caPath, ca, (err) ->
+    barrier.join()
+  fs.writefile certPath, ca, (err) ->
+    barrier.join()
+    
             
 verify = (cert, sig, message, callback) ->
   certPath = "temp/#{randFile()}"

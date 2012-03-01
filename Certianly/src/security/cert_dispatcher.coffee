@@ -97,10 +97,19 @@ pkcs12 = (request, response, formValues) ->
       return reportError response, err if err?
       formValues.certificate.pkcs12 = pkcs.toString("base64")
       jsonResponse response, formValues.certificate
-      
+     
+     
+sign = (request, response, formValues) ->
+  if error = notPresent formValues, ["cert", "privateKey", "ca", "message"]
+    return reporterror response, "You must supply a #{error}"
+  certgen.sign formValues.cert, formValues.privateKey, formValues.ca, new Buffer(formValues.message, "base64"), (error, results) ->
+    jsonResponse response, {result:results.toString("base64")}
+  
+
        
 exports.genCA = genCA
 exports.genKey = genKey
 exports.newCSR = newCSR
 exports.signCSR = signCSR
 exports.pkcs12 = pkcs12
+exports.sign = sign
