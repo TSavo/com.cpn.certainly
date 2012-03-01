@@ -300,7 +300,7 @@ sign = (cert, key, ca, message, callback) ->
     barrier.join()
   fs.writeFile caPath, ca, (err) ->
     barrier.join()
-  fs.writefile certPath, ca, (err) ->
+  fs.writeFile certPath, cert, (err) ->
     barrier.join()
     
             
