@@ -24,6 +24,7 @@ form = (request, callback = ->) ->
         o[pair[0]] = unescape pair[1].replace /\+/g, " "
       callback o if callback?
     else if request.headers["content-type"] is "application/json"
+      puts body
       callback JSON.parse body if callback?
     else
       callback "ERROR: unknown content type: #{request["content-type"]}" if callback?
