@@ -282,7 +282,7 @@ sign = (cert, key, ca, message, callback) ->
   certPath = "temp/#{randFile()}"
   sigPath = "temp/#{randFile()}"
   barrier = new ThreadBarrier 4, ->
-    args = ["-inkey #{keyPath}", "-out #{sigPath}", "-signer #{certPath}", "-certfile #{caPath}", "-nodetach", "-outform der", "-in #{messagePath}"]
+    args = ["-sign", "-inkey #{keyPath}", "-out #{sigPath}", "-signer #{certPath}", "-certfile #{caPath}", "-nodetach", "-outform der", "-in #{messagePath}"]
     cmd = "openssl smime #{args.join(" ")}"
     exec cmd, (err, stdout, stderr) ->
       ###fs.unlink keyPath
