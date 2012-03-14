@@ -58,7 +58,9 @@ genConfig = (options, callback) ->
 
 genExtensions = (options, callback) ->
   puts inspect options
-  confTemplate = "basicConstraints=critical,CA:#{options.CA}"
+  CA = "FALSE"
+  CA = "TRUE" if options.CA
+  confTemplate = "basicConstraints=critical,CA:#{CA}"
   if options.CA and options.pathlen? and options.pathlen > -1
     confTemplate += ",pathlen:#{options.pathlen}"
   confTemplate += "\n"
