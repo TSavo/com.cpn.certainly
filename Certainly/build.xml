@@ -3,7 +3,7 @@
 	<condition property="node.exec" value="tools/node/node.exe">
 	   <os family="windows"/>
 	</condition>
-	<condition property="node.exec" value="node">
+	<condition property="node.exec" value="/usr/local/bin/node">
 	   <os family="unix"/>
 	</condition>
 	
